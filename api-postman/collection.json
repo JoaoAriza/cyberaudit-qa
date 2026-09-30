@@ -1,0 +1,327 @@
+{
+  "info": {
+    "name": "CyberAudit — Billing / Checkout Transparente",
+    "description": "Pix + cartão via checkout transparente (BillingController). Requer o Backend rodando localmente com o profile `test` (H2). MP_ACCESS_TOKEN não configurado localmente por padrão — os requests de 'caminho feliz' esperam 503 nesse caso; ver descrição de cada um.\n\nCada pasta usa um usuário PRÓPRIO (registrado no início dela): o rate limit de checkout é de 5 tentativas/minuto por usuário, COMPARTILHADO entre /checkout/card e /checkout/pix. Rodar tudo com um usuário só faz a pasta de Pix nascer já sem cota, porque a de Cartão consumiu antes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Checkout — Cartão",
+      "item": [
+        {
+          "name": "Setup: registrar + login (usuário próprio desta pasta)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pay Test Card\",\n  \"email\": \"pay-test-card@example.com\",\n  \"password\": \"{{password}}\",\n  \"accountType\": \"INDIVIDUAL\",\n  \"termsAccepted\": true\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('registro OK ou usuário já existe', function () {",
+            "    pm.expect([200, 201, 400, 409]).to.include(pm.response.code);",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Setup: login → salva {{jwtCard}}",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"pay-test-card@example.com\",\n  \"password\": \"{{password}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('login 200', function () { pm.response.to.have.status(200); });",
+            "pm.environment.set('jwtCard', pm.response.json().token);"
+          ] } }]
+        },
+        {
+          "name": "Sem token de auth → 401",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/billing/checkout/card",
+            "body": { "mode": "raw", "raw": "{\n  \"plan\": \"PRO\",\n  \"cardTokenId\": \"{{cardTokenId}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('401 sem Authorization', function () { pm.response.to.have.status(401); });"
+          ] } }]
+        },
+        {
+          "name": "cardTokenId ausente → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwtCard}}" }
+            ],
+            "url": "{{baseUrl}}/billing/checkout/card",
+            "body": { "mode": "raw", "raw": "{\n  \"plan\": \"PRO\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('400 sem cardTokenId', function () { pm.response.to.have.status(400); });"
+          ] } }]
+        },
+        {
+          "name": "plano inválido → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwtCard}}" }
+            ],
+            "url": "{{baseUrl}}/billing/checkout/card",
+            "body": { "mode": "raw", "raw": "{\n  \"plan\": \"HOBBY\",\n  \"cardTokenId\": \"{{cardTokenId}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('400 plano inexistente', function () { pm.response.to.have.status(400); });"
+          ] } }]
+        },
+        {
+          "name": "FREE não é contratável → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwtCard}}" }
+            ],
+            "url": "{{baseUrl}}/billing/checkout/card",
+            "body": { "mode": "raw", "raw": "{\n  \"plan\": \"FREE\",\n  \"cardTokenId\": \"{{cardTokenId}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('400 — FREE não é plano contratável', function () { pm.response.to.have.status(400); });"
+          ] } }]
+        },
+        {
+          "name": "caminho feliz (200 com sandbox real, 503 sem MP_ACCESS_TOKEN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwtCard}}" }
+            ],
+            "url": "{{baseUrl}}/billing/checkout/card",
+            "body": { "mode": "raw", "raw": "{\n  \"plan\": \"PRO\",\n  \"cardTokenId\": \"{{cardTokenId}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "// Sem credencial TEST- do MP configurada localmente, o endpoint responde 503 (MercadoPagoService.requireConfigured).",
+            "// Com credencial real de sandbox, esperar 200 com status AUTHORIZED ou PENDING no corpo.",
+            "pm.test('200 (com MP configurado) ou 503 (sem credencial)', function () {",
+            "    pm.expect([200, 503]).to.include(pm.response.code);",
+            "});",
+            "if (pm.response.code === 200) {",
+            "    const body = pm.response.json();",
+            "    pm.test('status é AUTHORIZED ou PENDING', function () {",
+            "        pm.expect(['AUTHORIZED', 'PENDING']).to.include(body.status);",
+            "    });",
+            "    pm.test('paymentMethod é CARD', function () { pm.expect(body.paymentMethod).to.eql('CARD'); });",
+            "}"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "2. Checkout — Pix",
+      "item": [
+        {
+          "name": "Setup: registrar + login (usuário próprio desta pasta)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pay Test Pix\",\n  \"email\": \"pay-test-pix@example.com\",\n  \"password\": \"{{password}}\",\n  \"accountType\": \"INDIVIDUAL\",\n  \"termsAccepted\": true\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('registro OK ou usuário já existe', function () {",
+            "    pm.expect([200, 201, 400, 409]).to.include(pm.response.code);",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Setup: login → salva {{jwtPix}}",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"pay-test-pix@example.com\",\n  \"password\": \"{{password}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('login 200', function () { pm.response.to.have.status(200); });",
+            "pm.environment.set('jwtPix', pm.response.json().token);"
+          ] } }]
+        },
+        {
+          "name": "Sem token de auth → 401",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/billing/checkout/pix",
+            "body": { "mode": "raw", "raw": "{\n  \"plan\": \"PRO\",\n  \"cpf\": \"{{cpf}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('401 sem Authorization', function () { pm.response.to.have.status(401); });"
+          ] } }]
+        },
+        {
+          "name": "CPF com tamanho inválido → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwtPix}}" }
+            ],
+            "url": "{{baseUrl}}/billing/checkout/pix",
+            "body": { "mode": "raw", "raw": "{\n  \"plan\": \"PRO\",\n  \"cpf\": \"123\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('400 CPF inválido', function () { pm.response.to.have.status(400); });"
+          ] } }]
+        },
+        {
+          "name": "CPF ausente → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwtPix}}" }
+            ],
+            "url": "{{baseUrl}}/billing/checkout/pix",
+            "body": { "mode": "raw", "raw": "{\n  \"plan\": \"PRO\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('400 sem CPF', function () { pm.response.to.have.status(400); });"
+          ] } }]
+        },
+        {
+          "name": "caminho feliz (200 com sandbox real, 503 sem MP_ACCESS_TOKEN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwtPix}}" }
+            ],
+            "url": "{{baseUrl}}/billing/checkout/pix",
+            "body": { "mode": "raw", "raw": "{\n  \"plan\": \"PRO\",\n  \"cpf\": \"{{cpf}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 (com MP configurado) ou 503 (sem credencial)', function () {",
+            "    pm.expect([200, 503]).to.include(pm.response.code);",
+            "});",
+            "if (pm.response.code === 200) {",
+            "    const body = pm.response.json();",
+            "    pm.test('qrCode ou qrCodeBase64 presente', function () {",
+            "        pm.expect(body.qrCode || body.qrCodeBase64).to.exist;",
+            "    });",
+            "    pm.test('paymentId presente', function () { pm.expect(body.paymentId).to.be.a('string'); });",
+            "}"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "3. Rate limit do checkout (compartilhado entre card e pix)",
+      "item": [
+        {
+          "name": "Setup: registrar + login (usuário próprio desta pasta)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pay Test Rate\",\n  \"email\": \"pay-test-rate@example.com\",\n  \"password\": \"{{password}}\",\n  \"accountType\": \"INDIVIDUAL\",\n  \"termsAccepted\": true\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('registro OK ou usuário já existe', function () {",
+            "    pm.expect([200, 201, 400, 409]).to.include(pm.response.code);",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Setup: login → salva {{jwtRate}}",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"pay-test-rate@example.com\",\n  \"password\": \"{{password}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('login 200', function () { pm.response.to.have.status(200); });",
+            "pm.environment.set('jwtRate', pm.response.json().token);"
+          ] } }]
+        },
+        {
+          "name": "6 tentativas seguidas → as 5 primeiras passam, a 6a é 429",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{jwtRate}}" }
+            ],
+            "url": "{{baseUrl}}/billing/checkout/pix",
+            "body": { "mode": "raw", "raw": "{\n  \"plan\": \"PRO\",\n  \"cpf\": \"{{cpf}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "// Um request só dispara mais 5 via pm.sendRequest em cadeia de callback (compatível com",
+            "// qualquer versão do sandbox — nem toda engine do Newman aceita await em test-script) —",
+            "// assim a checagem inteira do rate limit fica autocontida, sem depender de rodar o Runner N vezes.",
+            "const def = {",
+            "    url: pm.variables.replaceIn('{{baseUrl}}/billing/checkout/pix'),",
+            "    method: 'POST',",
+            "    header: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + pm.environment.get('jwtRate') },",
+            "    body: { mode: 'raw', raw: JSON.stringify({ plan: 'PRO', cpf: pm.environment.get('cpf') }) }",
+            "};",
+            "",
+            "const codigos = [pm.response.code];",
+            "function proximo(i, done) {",
+            "    if (i >= 5) { done(); return; }",
+            "    pm.sendRequest(def, function (err, resp) {",
+            "        codigos.push(resp ? resp.code : (err ? -1 : null));",
+            "        proximo(i + 1, done);",
+            "    });",
+            "}",
+            "",
+            "proximo(0, function () {",
+            "    pm.test('6 respostas coletadas', function () { pm.expect(codigos.length).to.eql(6); });",
+            "    pm.test('nenhuma das 5 primeiras é 429', function () {",
+            "        pm.expect(codigos.slice(0, 5)).to.not.include(429);",
+            "    });",
+            "    pm.test('a 6a é 429', function () { pm.expect(codigos[5]).to.eql(429); });",
+            "});"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "4. Subscription (leitura)",
+      "item": [
+        {
+          "name": "GET /billing/subscription (usa jwtCard, criado na pasta 1)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwtCard}}" }],
+            "url": "{{baseUrl}}/billing/subscription"
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 com assinatura ou 204 sem nenhuma', function () {",
+            "    pm.expect([200, 204]).to.include(pm.response.code);",
+            "});",
+            "if (pm.response.code === 200) {",
+            "    const body = pm.response.json();",
+            "    pm.test('paymentMethod é CARD ou PIX', function () {",
+            "        pm.expect(['CARD', 'PIX']).to.include(body.paymentMethod);",
+            "    });",
+            "}"
+          ] } }]
+        }
+      ]
+    }
+  ]
+}

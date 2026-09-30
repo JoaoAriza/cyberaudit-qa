@@ -1,0 +1,14 @@
+{
+  "id": "cyberaudit-local-env",
+  "name": "CyberAudit — Local (docker-compose.test.yml)",
+  "values": [
+    { "key": "baseUrl", "value": "http://localhost:8081", "enabled": true },
+    { "key": "password", "value": "SenhaForte123!", "enabled": true },
+    { "key": "cardTokenId", "value": "card-token-de-teste", "enabled": true },
+    { "key": "cpf", "value": "111.444.777-35", "enabled": true },
+    { "key": "jwtCard", "value": "", "enabled": true },
+    { "key": "jwtPix", "value": "", "enabled": true },
+    { "key": "jwtRate", "value": "", "enabled": true }
+  ],
+  "_postman_variable_scope": "environment"
+}
