@@ -87,10 +87,25 @@ JavaScript.
 Selenium fica por último porque duplica a cobertura do Cypress — só vale se as
 vagas-alvo pedirem Selenium.
 
-**Status em 2026-09-30:** Fase 0 em andamento (este arquivo + `casos-de-teste.md` +
-`template-bug.md`, consolidando os 26 casos do PDF original com os 12 casos PAY-*
-do módulo de pagamento, já catalogados em `payment-module-requests.md` desde a
-validação do checkout transparente). Fases 1–6 não iniciadas.
+**Status em 2026-09-30:**
+
+- **Fase 0** ✅ — este arquivo + `casos-de-teste.md` (39 casos, os 26 do PDF
+  original + 12 PAY-* + 3 novos) + `template-bug.md`.
+- **Fase 1** ✅ confirmada de ponta a ponta, com ambiente real rodando (não só
+  arquivo escrito): `docker compose -f env/docker-compose.test.yml up --build`
+  sobe os 5 serviços, o `seeder` popula 3 contas, e testei manualmente login +
+  2FA (TOTP gerado com o mesmo secret semeado) + um scan ativo real contra o
+  Juice Shop (SSRF allowlist e bypass de posse de domínio via
+  `PLATFORM_STAFF_EMAILS` funcionando). No caminho apareceram e foram corrigidos
+  dois problemas reais de ambiente (não hipotéticos): o guard anti-SSRF
+  bloqueava os alvos Docker por padrão (resolvido com uma allowlist que só
+  existe sob o profile `qa-docker` — ver `SsrfTestAllowlistConfig` no Backend) e
+  o `vite.config.ts` do Frontend recusava buildar apontando pra
+  `localhost:8081` (resolvido com `VITE_ALLOW_LOCAL_API=1`, escape hatch que já
+  existia pra esse caso exato). Um achado de scanner (não corrigido, ver
+  `casos-de-teste.md`, nota do SCAN-01) ficou registrado como candidato a bug
+  real pra Fase 3.
+- **Fases 2–6** não iniciadas.
 
 ## CI, relatórios e marcos do CV
 

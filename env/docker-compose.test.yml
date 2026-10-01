@@ -1,0 +1,118 @@
+# Ambiente de teste do cyberaudit-qa — Fase 1 do plano de teste.
+#
+# `docker compose -f env/docker-compose.test.yml up --build` sobe os cinco
+# serviços do escopo (backend, frontend, PostgreSQL, Juice Shop, WireMock) mais
+# um seeder que roda uma vez e sai. Espera o `seeder` terminar (exit 0) antes de
+# considerar o ambiente pronto — ele só roda depois que o backend responde
+# saudável, porque precisa que o Hibernate já tenha criado o schema
+# (ddl-auto=update, não existe migração separada neste projeto).
+#
+# Pressupõe Backend/ e Frontend/ como pastas irmãs de cyberaudit-qa/ (mesmo nível
+# em C:\Projetos\Cyberaudit\) — é assim que os três repos vivem localmente hoje.
+# Para CI (Fase 6), checkout dos três repos lado a lado antes deste comando.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cyberaudit_qa
+      POSTGRES_USER: cyberaudit_qa
+      POSTGRES_PASSWORD: cyberaudit_qa_test_only
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cyberaudit_qa -d cyberaudit_qa"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ../../Backend
+    environment:
+      PORT: 8081
+      DB_URL: jdbc:postgresql://postgres:5432/cyberaudit_qa
+      DB_USERNAME: cyberaudit_qa
+      DB_PASSWORD: cyberaudit_qa_test_only
+      # 32+ bytes fixos, só para este ambiente — nunca usar em produção.
+      JWT_SECRET: qa-docker-jwt-secret-32-bytes-minimo-fixo-e-conhecido
+      DOMAIN_VERIFICATION_SECRET: qa-docker-domain-verification-secret-fixo
+      # Origem do Frontend visto PELO NAVEGADOR (Cypress/Selenium rodam no host,
+      # não dentro da rede do Docker) — precisa bater com a porta publicada abaixo.
+      ALLOWED_ORIGINS: http://localhost:8090
+      TRUSTED_PROXY_COUNT: "0"
+      MAIL_ENABLED: "false"
+      # qa-pro e qa-enterprise pulam a exigência de posse de domínio no scan ativo
+      # (PlatformStaffService — primeira checagem de PlanLimitService.enforceScanLimits,
+      # antes até do bloqueio de plano FREE). Sem isto, mesmo com o domínio marcado
+      # "verified" na tabela, o scan ativo ainda faz uma checagem AO VIVO de
+      # /.well-known/cyberaudit.txt no alvo — e terceiros como o Juice Shop não têm
+      # como servir esse arquivo. qa-free fica de fora de propósito: é o usuário do
+      # caso DOM-01 (domínio não verificado → recusado), que exige NÃO pular a checagem.
+      PLATFORM_STAFF_EMAILS: qa-pro@cyberaudit.test,qa-enterprise@cyberaudit.test
+      # Sem token do MP: os testes de pagamento (PAY-*) ficam para quando o
+      # WireMock tiver mappings simulando a API do Mercado Pago — ver docs/.
+      MP_ACCESS_TOKEN: ""
+      NVD_API_KEY: ""
+      SCAN_MAX_CONCURRENT: "4"
+      SCAN_ACQUIRE_TIMEOUT: "20"
+      DNS_CACHE_TTL_SECONDS: "30"
+      # A allowlist que existe SÓ neste profile — ver SsrfTestAllowlistConfig e o
+      # caso SSRF-06, que prova que ela não existe fora dele.
+      SPRING_PROFILES_ACTIVE: qa-docker
+      SSRF_TEST_ALLOWLIST: juice-shop,wiremock
+    ports:
+      # Publicado pra Cypress/Selenium/RestAssured no host baterem direto na API.
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ../../Frontend
+      args:
+        # URL que o JAVASCRIPT DO NAVEGADOR usa — o navegador roda no host, fora
+        # da rede do Docker, então tem que ser a porta publicada do backend
+        # acima, nunca o nome do serviço "backend".
+        VITE_API_URL: http://localhost:8081
+    ports:
+      - "127.0.0.1:8090:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  juice-shop:
+    image: bkimminich/juice-shop
+    ports:
+      - "127.0.0.1:3001:3000"
+
+  wiremock:
+    image: wiremock/wiremock:3.9.1
+    command: ["--global-response-templating"]
+    ports:
+      - "127.0.0.1:8082:8080"
+    volumes:
+      - ./wiremock/mappings:/home/wiremock/mappings
+      - ./wiremock/__files:/home/wiremock/__files
+
+  # Roda uma vez (popula os usuários de seed) e sai — não faz parte do "up"
+  # de longa duração. `docker compose ... up seeder` ou aguardar o exit 0 no
+  # log confirma que terminou.
+  seeder:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: cyberaudit_qa_test_only
+    volumes:
+      - ./seed.sql:/seed.sql:ro
+    entrypoint:
+      ["psql", "-h", "postgres", "-U", "cyberaudit_qa", "-d", "cyberaudit_qa", "-f", "/seed.sql"]
+    depends_on:
+      backend:
+        condition: service_healthy

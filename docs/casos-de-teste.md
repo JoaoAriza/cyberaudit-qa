@@ -102,3 +102,18 @@ ambiente de teste local (nunca contra produção — Regra 1).
 - PAY-13, PAY-14 e PAY-15 são casos novos, criados a partir de bugs reais
   encontrados e corrigidos nesta sessão — bons candidatos a "bug real encontrado
   no CyberAudit" para o marco do CV (ver `plano-de-teste.md`).
+- **SCAN-01, possível bug real encontrado montando a Fase 1 (2026-09-30).**
+  Rodei `GET /scan?url=http://juice-shop:3000&active=true` de verdade contra o
+  ambiente Docker (login + 2FA reais, `PLATFORM_STAFF_EMAILS` pra pular a posse
+  de domínio). O scan completou (200), mas com `httpStatus:0`,
+  `sslInfo.message:"Erro ao verificar certificado: Unsupported or unrecognized
+  SSL message"` e `headers.error:"HTTP/1.1 header parser received no bytes"` —
+  parece que o scanner tenta HTTPS no host:porta independente do esquema da URL
+  de entrada, e quando isso falha contra um alvo HTTP puro numa porta
+  não-padrão (como o Juice Shop, 3000), os módulos de headers/TLS erram em
+  cascata em vez de cair pro HTTP puro. Também demorou ~2min por causa de
+  `CrtShService` tentando consultar `crt.sh`/`certspotter` de verdade pra um
+  hostname que não existe na internet (timeout real, não bug — mas vale
+  considerar mockar isso via WireMock nesse ambiente). Não investiguei a causa
+  raiz nem mexi no código do motor de scan — é exatamente o tipo de achado que
+  SCAN-01 deveria registrar como bug, não ajustar o teste pra esperar isso.
