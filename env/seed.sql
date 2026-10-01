@@ -74,22 +74,21 @@ ON CONFLICT (email) DO NOTHING;
 -- independente, que busca /.well-known/cyberaudit.txt no alvo AO VIVO antes de
 -- todo scan ativo (DomainProtectionService) — terceiros como o Juice Shop não
 -- têm como servir esse arquivo. Quem resolve essa segunda guarda é
--- PLATFORM_STAFF_EMAILS no docker-compose.test.yml (pula as duas checagens por
--- completo), não esta tabela. qa-free fica de fora de propósito: é quem serve
--- pro caso DOM-01 (domínio não verificado → recusado), que precisa das duas
--- guardas ativas.
-
-INSERT INTO domains (id, account_id, host, verified, verified_at, created_at)
-VALUES ('d0000000-0000-0000-0000-000000000090', 'a0000000-0000-0000-0000-000000000090',
-        'juice-shop:3000', true, now(), now())
-ON CONFLICT (account_id, host) DO NOTHING;
-
-INSERT INTO domains (id, account_id, host, verified, verified_at, created_at)
-VALUES ('d0000000-0000-0000-0000-000000000091', 'a0000000-0000-0000-0000-000000000090',
-        'wiremock:8080', true, now(), now())
-ON CONFLICT (account_id, host) DO NOTHING;
+-- PLATFORM_STAFF_EMAILS no docker-compose.test.yml.
+--
+-- SÓ a conta Enterprise recebe domínio verificado aqui, e só ela está em
+-- PLATFORM_STAFF_EMAILS (revisado em 2026-10-01, antes as duas tinham bypass +
+-- domínio verificado). qa-pro fica SEM nenhum domínio verificado e SEM bypass
+-- de propósito — é a conta do caso DOM-01 (PRO de verdade, domínio não
+-- verificado, scan ativo recusado). Com bypass ou domínio verificado, esse
+-- cenário nunca seria alcançável com ela.
 
 INSERT INTO domains (id, account_id, host, verified, verified_at, created_at)
 VALUES ('d0000000-0000-0000-0000-0000000000e9', 'a0000000-0000-0000-0000-00000000e9e9',
         'juice-shop:3000', true, now(), now())
+ON CONFLICT (account_id, host) DO NOTHING;
+
+INSERT INTO domains (id, account_id, host, verified, verified_at, created_at)
+VALUES ('d0000000-0000-0000-0000-0000000000ea', 'a0000000-0000-0000-0000-00000000e9e9',
+        'wiremock:8080', true, now(), now())
 ON CONFLICT (account_id, host) DO NOTHING;

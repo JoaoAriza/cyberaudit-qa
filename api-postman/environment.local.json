@@ -3,7 +3,10 @@
   "name": "CyberAudit — Local (docker-compose.test.yml)",
   "values": [
     { "key": "baseUrl", "value": "http://localhost:8081", "enabled": true },
-    { "key": "password", "value": "SenhaForte123!", "enabled": true },
+    { "key": "password", "value": "Teste@123", "enabled": true },
+    { "key": "emailFree", "value": "qa-free@cyberaudit.test", "enabled": true },
+    { "key": "emailPro", "value": "qa-pro@cyberaudit.test", "enabled": true },
+    { "key": "emailEnterprise", "value": "qa-enterprise@cyberaudit.test", "enabled": true },
     { "key": "cardTokenId", "value": "card-token-de-teste", "enabled": true },
     { "key": "cpf", "value": "111.444.777-35", "enabled": true },
     { "key": "jwtCard", "value": "", "enabled": true },

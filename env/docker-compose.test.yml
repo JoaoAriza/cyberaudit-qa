@@ -42,14 +42,18 @@ services:
       ALLOWED_ORIGINS: http://localhost:8090
       TRUSTED_PROXY_COUNT: "0"
       MAIL_ENABLED: "false"
-      # qa-pro e qa-enterprise pulam a exigência de posse de domínio no scan ativo
+      # Só qa-enterprise pula a exigência de posse de domínio no scan ativo
       # (PlatformStaffService — primeira checagem de PlanLimitService.enforceScanLimits,
       # antes até do bloqueio de plano FREE). Sem isto, mesmo com o domínio marcado
       # "verified" na tabela, o scan ativo ainda faz uma checagem AO VIVO de
       # /.well-known/cyberaudit.txt no alvo — e terceiros como o Juice Shop não têm
-      # como servir esse arquivo. qa-free fica de fora de propósito: é o usuário do
-      # caso DOM-01 (domínio não verificado → recusado), que exige NÃO pular a checagem.
-      PLATFORM_STAFF_EMAILS: qa-pro@cyberaudit.test,qa-enterprise@cyberaudit.test
+      # como servir esse arquivo. qa-pro fica de fora DE PROPÓSITO (revisado em
+      # 2026-10-01): é a conta do caso DOM-01 (PRO de verdade, domínio NÃO
+      # verificado, scan ativo recusado) — com bypass ou com o domínio marcado
+      # verified no seed, esse cenário nunca seria alcançável. qa-free também
+      # fica de fora, mas por outro motivo: plano FREE já bloqueia scan ativo
+      # antes de chegar na checagem de domínio (PLAN-01), nem testa o DOM-01.
+      PLATFORM_STAFF_EMAILS: qa-enterprise@cyberaudit.test
       # Sem token do MP: os testes de pagamento (PAY-*) ficam para quando o
       # WireMock tiver mappings simulando a API do Mercado Pago — ver docs/.
       MP_ACCESS_TOKEN: ""
