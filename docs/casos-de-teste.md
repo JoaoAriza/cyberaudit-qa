@@ -25,8 +25,8 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
-| AUTH-01 | Autenticação | Login com credenciais válidas | JWT emitido, acesso liberado | Postman, RestAssured | P0 | ⚠️ Parcial — ✅ Postman (2026-10-01), RestAssured pendente |
-| AUTH-02 | Autenticação | Senha errada e usuário inexistente | 401 com a mesma mensagem nos dois casos, sem revelar se o usuário existe | RestAssured | P0 | 🔲 A fazer |
+| AUTH-01 | Autenticação | Login com credenciais válidas | JWT emitido, acesso liberado | Postman, RestAssured | P0 | ✅ Passou — Postman (2026-10-01) e RestAssured (2026-10-03) |
+| AUTH-02 | Autenticação | Senha errada e usuário inexistente | 401 com a mesma mensagem nos dois casos, sem revelar se o usuário existe | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-03) |
 | AUTH-03 | Autenticação | JWT expirado, assinatura adulterada, `alg: none` | 401 em todos | RestAssured | P0 | 🔲 A fazer |
 | AUTH-04 | 2FA | Sem código TOTP, código inválido, código reutilizado | Acesso negado nos três | RestAssured, Cypress | P0 | 🔲 A fazer |
 | AUTH-05 | API key | Chamada com API key revogada | 401 | Postman, RestAssured | P1 | 🔲 A fazer |
@@ -132,3 +132,13 @@ ambiente de teste local (nunca contra produção — Regra 1).
 AUTH-01 escrito e rodando verde via Newman (`newman run collection.json -e
 environment.local.json`): 1 request, 3 assertions, 0 falhas. Primeiro caso real
 da Fase 2, autoria do usuário.
+
+## 2026-10-03 — Fase 3 (RestAssured) iniciada
+
+Projeto Maven em `api-restassured/` montado (`pom.xml`, `TestConfig` como classe-base
+com `@BeforeAll` que fixa o `baseURI`, `config.properties`). `AuthTest` com 3 testes
+verdes contra o ambiente Docker: AUTH-01 (login válido → 200 + `requires2fa: true`) e
+AUTH-02 (senha errada e usuário inexistente → 401, ambos com `{"error":"Autenticação
+necessária."}`). O login válido funciona também como controle do AUTH-02: um path
+inexistente devolve o mesmo 401 com o mesmo corpo, então só o 200 no path certo prova
+que o 401 é de credencial rejeitada. Autoria do usuário.
