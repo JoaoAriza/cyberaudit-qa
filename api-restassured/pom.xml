@@ -57,6 +57,34 @@
             <version>${assertj.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <!--
+            JJWT — só para o AUTH-03, que precisa FORJAR tokens do lado do teste:
+            um token válido (controle positivo) e as variações inválidas (expirado,
+            assinatura adulterada, alg:none). É a MESMA lib e versão que o Backend usa
+            (io.jsonwebtoken 0.12.6), para assinar HS256 igual ao JwtUtil. O segredo do
+            ambiente de teste vem do config.properties (jwt.secret) / variável de
+            ambiente, nunca hardcoded no teste.
+        -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.6</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.6</version>
+            <scope>test</scope>
+            <!-- runtime na prática, mas test-scope basta: estes testes só rodam em test -->
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.6</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
