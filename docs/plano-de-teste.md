@@ -87,7 +87,7 @@ JavaScript.
 Selenium fica por último porque duplica a cobertura do Cypress — só vale se as
 vagas-alvo pedirem Selenium.
 
-**Status em 2026-09-30:**
+**Status em 2026-10-03** (detalhes e armadilhas aprendidas em `../HANDOFF.md`):
 
 - **Fase 0** ✅ — este arquivo + `casos-de-teste.md` (39 casos, os 26 do PDF
   original + 12 PAY-* + 3 novos) + `template-bug.md`.
@@ -105,7 +105,16 @@ vagas-alvo pedirem Selenium.
   existia pra esse caso exato). Um achado de scanner (não corrigido, ver
   `casos-de-teste.md`, nota do SCAN-01) ficou registrado como candidato a bug
   real pra Fase 3.
-- **Fases 2–6** não iniciadas.
+- **Fase 2 (Postman)** 🟡 em andamento — `collection.json` reescrita pelo dono do
+  repositório do zero (a versão anterior, escrita pelo Claude antes da Regra 3
+  existir, foi descartada). Pronto: AUTH-01. Faltam os outros casos marcados
+  Postman: AUTH-05, DOM-01, PAY-03, PAY-05. Newman ainda não está no CI.
+- **Fase 3 (RestAssured)** 🟡 iniciada em 2026-10-03 — projeto Maven em
+  `api-restassured/`, `TestConfig` como classe-base, `AuthTest` com AUTH-01 e
+  AUTH-02 (3 testes verdes contra o ambiente Docker). Pendente: estabilizar o
+  AUTH-02 (e-mail inexistente fixo bate no rate-limit de login em execuções
+  repetidas — ver `HANDOFF.md`).
+- **Fases 4–6** não iniciadas.
 
 ## CI, relatórios e marcos do CV
 
