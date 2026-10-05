@@ -27,7 +27,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 |---|---|---|---|---|---|---|
 | AUTH-01 | Autenticação | Login com credenciais válidas | JWT emitido, acesso liberado | Postman, RestAssured | P0 | ✅ Passou — Postman (2026-10-01) e RestAssured (2026-10-03) |
 | AUTH-02 | Autenticação | Senha errada e usuário inexistente | 401 com a mesma mensagem nos dois casos, sem revelar se o usuário existe | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-03) |
-| AUTH-03 | Autenticação | JWT expirado, assinatura adulterada, `alg: none` | 401 em todos | RestAssured | P0 | 🔲 A fazer |
+| AUTH-03 | Autenticação | JWT expirado, assinatura adulterada, `alg: none` | 401 em todos | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) |
 | AUTH-04 | 2FA | Sem código TOTP, código inválido, código reutilizado | Acesso negado nos três | RestAssured, Cypress | P0 | 🔲 A fazer |
 | AUTH-05 | API key | Chamada com API key revogada | 401 | Postman, RestAssured | P1 | 🔲 A fazer |
 | AUTHZ-01 | Controle de acesso | Usuário A consulta scan do usuário B pelo ID | 403 ou 404, nunca os dados | RestAssured | P0 | 🔲 A fazer |
@@ -142,3 +142,16 @@ AUTH-02 (senha errada e usuário inexistente → 401, ambos com `{"error":"Auten
 necessária."}`). O login válido funciona também como controle do AUTH-02: um path
 inexistente devolve o mesmo 401 com o mesmo corpo, então só o 200 no path certo prova
 que o 401 é de credencial rejeitada. Autoria do usuário.
+
+## 2026-10-05 — AUTH-03 (RestAssured) verde
+
+`AuthTokenTest` (classe nova, `extends TestConfig`) cobre o AUTH-03 com 6 testes
+verdes contra o ambiente Docker, batendo em `GET /history/recent` (rota
+`authenticated()`): token válido forjado → 200 (controle positivo), e expirado,
+assinatura adulterada, `alg:none`, assinado com outro segredo e sem token → 401 com
+`{"error":"Autenticação necessária."}`. Os tokens são forjados em Java com o jjwt
+0.12.6 (mesma lib do Backend) usando o `jwt.secret` do ambiente de teste — fluxo que
+dispensa o 2FA. O controle positivo é obrigatório: um 401 de path/rota errada é
+idêntico, então só o 200 no mesmo path prova que os 401 são recusa real do token.
+Autoria do usuário. (Pendente de registro à parte: no SSRF-03, a forma hex
+`0x7f000001` não é normalizada pelo guard e passa — candidato a bug, ver conversa.)
