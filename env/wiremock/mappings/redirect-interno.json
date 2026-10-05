@@ -1,0 +1,14 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "/redirect-interno"
+  },
+  "response": {
+    "status": 302,
+    "headers": { "Location": "http://169.254.169.254/" }
+  },
+  "metadata": {
+    "caso": "SSRF-05",
+    "nota": "Alvo externo (wiremock, allowlisted) que redireciona para IP interno. O scanner segue o redirect manualmente e revalida cada hop no SsrfGuard, entao o 302 -> 169.254.169.254 morre no hop: o scan volta 200 com finalUrl na URL original e o modulo que faz o fetch marca error 'Scan bloqueado: ... endereco interno/privado (169.254.169.254)'. Nenhum dado do alvo interno vaza."
+  }
+}
