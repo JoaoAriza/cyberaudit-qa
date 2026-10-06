@@ -55,7 +55,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
-| DOM-01 | Domínio | Varredura ativa em domínio não verificado | Recusada | Postman, RestAssured | P0 | 🔲 A fazer |
+| DOM-01 | Domínio | Varredura ativa em domínio não verificado | Recusada | Postman, RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) e Postman (2026-10-06) |
 | SCAN-01 | Motor | Varredura passiva no alvo controlado | Módulos esperados com status OK | RestAssured | P0 | 🐛 Bug suspeito já observado manualmente (ver nota abaixo) — teste formal pendente |
 | SCAN-02 | Motor | Alvo com atraso forçado no WireMock | Módulo marcado como timeout, relatório indica resultado parcial | RestAssured + WireMock | P1 | 🔲 A fazer |
 | SCAN-03 | Motor | Varredura ativa no Juice Shop | XSS e SQL injection detectados | RestAssured | P0 | 🔲 A fazer |
@@ -184,3 +184,13 @@ da sessão). Registrado em `bugs/BUG-01-apikey-auth-lazyinit.md` (Backend `8d32e
 Impacto no caso: AUTH-05 não pode virar verde enquanto o bug existe — a chave válida
 também dá 401, então não há controle positivo e "revogada → 401" passaria pelo motivo
 errado. Caso marcado 🐛; automação (RestAssured/Postman) só depois do fix no Backend.
+
+## 2026-10-06 — DOM-01 no Postman verde
+
+DOM-01 fechado nas duas ferramentas. Postman: 3 requests / 8 asserts verdes via
+Newman — AUTH-01 (200) + DOM-01 scan ativo em domínio não verificado (403,
+`error=ACCOUNT_DOMAIN_NOT_VERIFIED`, `host=juice-shop:3000`) + controle sem token
+(401, `error="401 UNAUTHORIZED"`). O token de sessão do qa-pro vem de um pre-request
+nível collection que forja JWT HS256 com CryptoJS e o `jwtSecret` do ambiente
+(dispensa 2FA) — infra do Claude; os `pm.test` são autoria do dono. RestAssured já
+estava verde (ActiveScanDomainTest, 2026-10-05).

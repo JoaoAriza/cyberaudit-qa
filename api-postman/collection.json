@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "testes Autenticação",
+    "name": "AUTH-01",
     "description": "Testes de validação de login de acordo com o seu tipo de usuario",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -40,6 +40,68 @@
               "    const body = pm.response.json();",
               "    pm.expect(body.requires2fa).to.eql(true);",
               "    pm.expect(body.user).to.be.null;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "DOM-01 - Scan ativo em domínio não verificado",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwtPro}}"
+          }
+        ],
+        "url": "{{baseUrl}}/scan?url={{scanHostNaoVerificado}}&active=true"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"DOM-01 - Status 403\", function () {",
+              "    pm.response.to.have.status(403);",
+              "});",
+              "",
+              "pm.test(\"DOM-01 - Erro de domínio não verificado\", function () {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.error).to.eql(\"ACCOUNT_DOMAIN_NOT_VERIFIED\");",
+              "});",
+              "",
+              "pm.test(\"DOM-01 - Host correto\", function () {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.host).to.eql(\"juice-shop:3000\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "DOM-01 - Scan ativo sem autenticação",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/scan?url={{scanHostNaoVerificado}}&active=true"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"DOM-01 - Sem autenticação retorna 401\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"DOM-01 - Erro de autenticação\", function () {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.error).to.eql(\"401 UNAUTHORIZED\");",
               "});"
             ]
           }
