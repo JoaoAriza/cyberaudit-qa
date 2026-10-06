@@ -29,7 +29,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | AUTH-02 | Autenticação | Senha errada e usuário inexistente | 401 com a mesma mensagem nos dois casos, sem revelar se o usuário existe | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-03) |
 | AUTH-03 | Autenticação | JWT expirado, assinatura adulterada, `alg: none` | 401 em todos | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) |
 | AUTH-04 | 2FA | Sem código TOTP, código inválido, código reutilizado | Acesso negado nos três | RestAssured, Cypress | P0 | 🔲 A fazer |
-| AUTH-05 | API key | Chamada com API key revogada | 401 | Postman, RestAssured | P1 | 🔲 A fazer |
+| AUTH-05 | API key | Chamada com API key revogada | 401 | Postman, RestAssured | P1 | 🐛 Bug — API key não autentica (ver `bugs/BUG-01-apikey-auth-lazyinit.md`); automação bloqueada até o fix |
 | AUTHZ-01 | Controle de acesso | Usuário A consulta scan do usuário B pelo ID | 403 ou 404, nunca os dados | RestAssured | P0 | 🔲 A fazer |
 
 ## Planos e limites
@@ -38,7 +38,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 |---|---|---|---|---|---|---|
 | PLAN-01 | Planos | Usuário Free solicita relatório PDF | Bloqueado (recurso Pro) | RestAssured, Cypress | P0 | 🔲 A fazer |
 | PLAN-02 | Planos | Exceder a cota de scans do plano | Bloqueado com mensagem clara | RestAssured | P1 | 🔲 A fazer |
-| RATE-01 | Rate limit | Exceder o limite configurado por usuário/IP | 429; volta a 200 após a janela | RestAssured | P1 | 🔲 A fazer |
+| RATE-01 | Rate limit | Exceder o limite configurado por usuário/IP | 429; volta a 200 após a janela | RestAssured | P1 | ⏸️ Adiado — decisão B tomada (ver nota 2026-10-05) |
 
 ## Anti-SSRF
 
@@ -155,3 +155,32 @@ dispensa o 2FA. O controle positivo é obrigatório: um 401 de path/rota errada 
 idêntico, então só o 200 no mesmo path prova que os 401 são recusa real do token.
 Autoria do usuário. (Pendente de registro à parte: no SSRF-03, a forma hex
 `0x7f000001` não é normalizada pelo guard e passa — candidato a bug, ver conversa.)
+
+## 2026-10-05 — RATE-01 adiado (decisão B registrada)
+
+Contrato verificado: o rate limit "por usuário/IP" é o `RateLimitService` em
+`ScanController.checkRateLimit`. **OWNER é isento** (`allow()` retorna true direto) e
+os 3 usuários do seed são OWNER, então nenhum deles dispara o limite. Como guest são
+5 req/min por IP (429 `{"error":"429 TOO_MANY_REQUESTS","message":"Muitas requisições.
+Limite de 5 requests/min para visitantes."}`), mas esse limite **colide com o diário
+de guest** (`GuestRateLimitService` = 5 scans/dia por IP, persistido no Postgres):
+os 5 requests que esvaziam o balde de 1 min também esgotam os 5/dia, então o 7º
+request pós-janela vira `DAILY_LIMIT_REACHED`, nunca 200 — a parte "volta a 200" fica
+inobservável como guest.
+
+**Decisão (dono, 2026-10-05): opção B.** Semear um usuário NÃO-OWNER (ex.
+`FREE_EMPLOYEE` na conta enterprise, que tem scan diário ilimitado → sem colisão),
+RPM 60; o 61º request → 429 e, com o refill ~1 token/seg, o próximo ~1-2s depois →
+200 (testa os dois lados). Exige alteração no `seed.sql` (infra) + ~61 requests no
+teste. **Retomar depois** — foco atual é Postman, RestAssured e iniciar o Cypress.
+
+## 2026-10-05 — AUTH-05 vira bug (API key quebrada)
+
+Ao verificar o contrato do AUTH-05 (chave revogada → 401), descobri que a API key
+NÃO autentica de jeito nenhum: toda chamada com `X-Api-Key`, inclusive chave válida
+recém-criada no próprio `/api-keys/ci`, dá 401 por `LazyInitializationException` em
+`ApiKeyAuthFilter:54` (`user.getAuthorities()` sobre o proxy lazy de `createdBy`, fora
+da sessão). Registrado em `bugs/BUG-01-apikey-auth-lazyinit.md` (Backend `8d32e2a`).
+Impacto no caso: AUTH-05 não pode virar verde enquanto o bug existe — a chave válida
+também dá 401, então não há controle positivo e "revogada → 401" passaria pelo motivo
+errado. Caso marcado 🐛; automação (RestAssured/Postman) só depois do fix no Backend.
