@@ -107,6 +107,48 @@
           }
         }
       ]
+    },
+    {
+      "name": "PAY-03 - Checkout PRO sem cardTokenId",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwtPro}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/billing/checkout/card",
+        "body": {
+          "mode": "raw",
+          "raw":  "{\"plan\": \"PRO\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"PAY-03 - Status 400\",function() {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "pm.test(\"PAY-03 - BAD_REQUEST\",function() {",
+              "    const body = pm.response.json();",
+              "pm.expect(body.error).to.eql(\"400 BAD_REQUEST\");",
+              "});",
+              "pm.test(\"PAY-03 - Mensagem indica ausência de cardTokenId\",function() {",
+              "const body = pm.response.json();",
+              "pm.expect(body.message).to.include(\"cardTokenId ausente\")",
+              "});"
+            ]
+          }
+        }
+      ]
     }
   ],
   "event": [
