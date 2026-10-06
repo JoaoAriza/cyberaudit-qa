@@ -46,5 +46,27 @@
         }
       ]
     }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// INFRA (QA, Regra 3): forja um JWT HS256 de SESSAO do qa-pro em {{jwtPro}},",
+          "// usando o mesmo segredo do ambiente de teste ({{jwtSecret}}). Dispensa o 2FA",
+          "// nos casos que precisam de sessao (ex.: DOM-01). Roda antes de cada request.",
+          "// As asserces (pm.test) de cada caso ficam em cada request, nao aqui.",
+          "function b64url(wa){ return CryptoJS.enc.Base64.stringify(wa).split('+').join('-').split('/').join('_').split('=').join(''); }",
+          "function b64urlStr(s){ return b64url(CryptoJS.enc.Utf8.parse(s)); }",
+          "var now = Math.floor(Date.now() / 1000);",
+          "var header = { alg: 'HS256', typ: 'JWT' };",
+          "var payload = { sub: pm.environment.get('emailPro'), role: 'OWNER', userId: pm.environment.get('userIdPro'), name: 'QA Pro', twoFactorPending: false, iat: now, exp: now + 3600 };",
+          "var signingInput = b64urlStr(JSON.stringify(header)) + '.' + b64urlStr(JSON.stringify(payload));",
+          "var sig = b64url(CryptoJS.HmacSHA256(signingInput, pm.environment.get('jwtSecret')));",
+          "pm.environment.set('jwtPro', signingInput + '.' + sig);"
+        ]
+      }
+    }
   ]
 }

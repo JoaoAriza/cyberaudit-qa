@@ -11,7 +11,14 @@
     { "key": "cpf", "value": "111.444.777-35", "enabled": true },
     { "key": "jwtCard", "value": "", "enabled": true },
     { "key": "jwtPix", "value": "", "enabled": true },
-    { "key": "jwtRate", "value": "", "enabled": true }
+    { "key": "jwtRate", "value": "", "enabled": true },
+
+    { "key": "jwtSecret", "value": "qa-docker-jwt-secret-32-bytes-minimo-fixo-e-conhecido", "enabled": true },
+    { "key": "userIdPro", "value": "b0000000-0000-0000-0000-000000000090", "enabled": true },
+    { "key": "userIdEnterprise", "value": "b0000000-0000-0000-0000-00000000e9e9", "enabled": true },
+    { "key": "userIdFree", "value": "b0000000-0000-0000-0000-00000000f1ee", "enabled": true },
+    { "key": "scanHostNaoVerificado", "value": "http://juice-shop:3000", "enabled": true },
+    { "key": "jwtPro", "value": "", "enabled": true }
   ],
   "_postman_variable_scope": "environment"
 }
