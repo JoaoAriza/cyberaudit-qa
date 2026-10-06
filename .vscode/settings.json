@@ -1,0 +1,8 @@
+{
+  "json.schemas": [
+    {
+      "fileMatch": ["**/api-postman/collection.json"],
+      "url": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    }
+  ]
+}

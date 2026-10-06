@@ -1,0 +1,16 @@
+{
+  "name": "api-postman",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "newman run collection.json -e environment.local.json -r cli,htmlextra"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "newman": "^6.2.2",
+    "newman-reporter-htmlextra": "^1.23.1"
+  }
+}
