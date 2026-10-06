@@ -1,0 +1,15 @@
+{
+  "name": "e2e-cypress",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Testes E2E (Cypress) do CyberAudit — Fase 4 do plano de teste.",
+  "scripts": {
+    "cy:open": "cypress open",
+    "cy:run": "cypress run",
+    "smoke": "cypress run --spec cypress/e2e/smoke.cy.js"
+  },
+  "devDependencies": {
+    "cypress": "^13.15.0",
+    "otplib": "^12.0.1"
+  }
+}
