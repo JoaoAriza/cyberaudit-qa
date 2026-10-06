@@ -125,7 +125,7 @@
         "url": "{{baseUrl}}/billing/checkout/card",
         "body": {
           "mode": "raw",
-          "raw":  "{\"plan\": \"PRO\"}"
+          "raw": "{\"plan\": \"PRO\"}"
         }
       },
       "event": [
@@ -149,28 +149,79 @@
           }
         }
       ]
-    }
-  ],
-  "event": [
+    },
     {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "// INFRA (QA, Regra 3): forja um JWT HS256 de SESSAO do qa-pro em {{jwtPro}},",
-          "// usando o mesmo segredo do ambiente de teste ({{jwtSecret}}). Dispensa o 2FA",
-          "// nos casos que precisam de sessao (ex.: DOM-01). Roda antes de cada request.",
-          "// As asserces (pm.test) de cada caso ficam em cada request, nao aqui.",
-          "function b64url(wa){ return CryptoJS.enc.Base64.stringify(wa).split('+').join('-').split('/').join('_').split('=').join(''); }",
-          "function b64urlStr(s){ return b64url(CryptoJS.enc.Utf8.parse(s)); }",
-          "var now = Math.floor(Date.now() / 1000);",
-          "var header = { alg: 'HS256', typ: 'JWT' };",
-          "var payload = { sub: pm.environment.get('emailPro'), role: 'OWNER', userId: pm.environment.get('userIdPro'), name: 'QA Pro', twoFactorPending: false, iat: now, exp: now + 3600 };",
-          "var signingInput = b64urlStr(JSON.stringify(header)) + '.' + b64urlStr(JSON.stringify(payload));",
-          "var sig = b64url(CryptoJS.HmacSHA256(signingInput, pm.environment.get('jwtSecret')));",
-          "pm.environment.set('jwtPro', signingInput + '.' + sig);"
-        ]
-      }
+      "name": "PAY-05 - Checkout Pix com CPF de tamanho inválido",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwtPro}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/billing/checkout/pix",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"plan\": \"Pro\",\n \"cpf\": \"123\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"PAY-05 - Status 400\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+
+              "pm.test(\"PAY-05 - Erro BAD_REQUEST\", function () {",
+                  "const body = pm.response.json();",
+
+                  "pm.expect(body.error).to.eql(\"400 BAD_REQUEST\");",
+              "});",
+
+              "pm.test(\"PAY-05 - Mensagem indica CPF com quantidade inválida de dígitos\", function () {",
+              "    const body = pm.response.json();",
+
+              "    pm.expect(body.message).to.include(\"informe os 11 dígitos\")",
+              "});"
+            ]
+          }
+        }
+      ]
     }
-  ]
+],
+"event": [
+  {
+    "listen": "prerequest",
+    "script": {
+      "type": "text/javascript",
+      "exec": [
+        "// INFRA (QA, Regra 3): forja um JWT HS256 de SESSAO do qa-pro em {{jwtPro}},",
+        "// usando o mesmo segredo do ambiente de teste ({{jwtSecret}}). Dispensa o 2FA",
+        "// nos casos que precisam de sessao (ex.: DOM-01). Roda antes de cada request.",
+        "// As asserces (pm.test) de cada caso ficam em cada request, nao aqui.",
+        "function b64url(wa){ return CryptoJS.enc.Base64.stringify(wa).split('+').join('-').split('/').join('_').split('=').join(''); }",
+        "function b64urlStr(s){ return b64url(CryptoJS.enc.Utf8.parse(s)); }",
+        "var now = Math.floor(Date.now() / 1000);",
+        "var header = { alg: 'HS256', typ: 'JWT' };",
+        "var payload = { sub: pm.environment.get('emailPro'), role: 'OWNER', userId: pm.environment.get('userIdPro'), name: 'QA Pro', twoFactorPending: false, iat: now, exp: now + 3600 };",
+        "var signingInput = b64urlStr(JSON.stringify(header)) + '.' + b64urlStr(JSON.stringify(payload));",
+        "var sig = b64url(CryptoJS.HmacSHA256(signingInput, pm.environment.get('jwtSecret')));",
+        "pm.environment.set('jwtPro', signingInput + '.' + sig);"
+      ]
+    }
+  }
+]
 }
