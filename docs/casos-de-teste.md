@@ -30,7 +30,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | AUTH-03 | Autenticação | JWT expirado, assinatura adulterada, `alg: none` | 401 em todos | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) |
 | AUTH-04 | 2FA | Sem código TOTP, código inválido, código reutilizado | Acesso negado nos três | RestAssured, Cypress | P0 | 🔲 A fazer |
 | AUTH-05 | API key | Chamada com API key revogada | 401 | Postman, RestAssured | P1 | 🐛 Bug — API key não autentica (ver `bugs/BUG-01-apikey-auth-lazyinit.md`); automação bloqueada até o fix |
-| AUTHZ-01 | Controle de acesso | Usuário A consulta scan do usuário B pelo ID | 403 ou 404, nunca os dados | RestAssured | P0 | 🔲 A fazer |
+| AUTHZ-01 | Controle de acesso | Usuário A consulta scan do usuário B pelo ID | 403 ou 404, nunca os dados | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-08) |
 
 ## Planos e limites
 
@@ -194,3 +194,15 @@ Newman — AUTH-01 (200) + DOM-01 scan ativo em domínio não verificado (403,
 nível collection que forja JWT HS256 com CryptoJS e o `jwtSecret` do ambiente
 (dispensa 2FA) — infra do Claude; os `pm.test` são autoria do dono. RestAssured já
 estava verde (ActiveScanDomainTest, 2026-10-05).
+
+## 2026-10-08 — AUTHZ-01 (RestAssured) verde
+
+`ScanHistoryAuthzTest` (extends TestConfig), 4 testes verdes contra o ambiente Docker.
+`@BeforeAll` forja o token do enterprise (B), cria um scan passivo (`GET
+/scan?url=http://wiremock:8080/health&active=false` → 200, ~persiste um ScanRecord) e
+lê o `id` em `/history/recent`. Testes: controle (B lê o próprio id → 200 com corpo),
+AUTHZ-01 cross-account (A=qa-pro lê o id do B → 404 corpo vazio), id inexistente (404
+vazio) e sem token (401). Cross-account e id-inexistente são indistinguíveis (404
+vazio, "não confirma existência") — por isso o controle 200 do dono é obrigatório pra
+provar que o 404 do A é dado escondido, não id inválido. Forja via jjwt com o
+`jwt.secret` do ambiente (dispensa 2FA). Autoria do dono.
