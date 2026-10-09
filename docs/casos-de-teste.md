@@ -36,7 +36,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
-| PLAN-01 | Planos | Usuário Free solicita relatório PDF | Bloqueado (recurso Pro) | RestAssured, Cypress | P0 | 🔲 A fazer |
+| PLAN-01 | Planos | Usuário Free solicita relatório PDF | Bloqueado (recurso Pro) | RestAssured, Cypress | P0 | ⚠️ Parcial — RestAssured ✅ (2026-10-09); Cypress pendente |
 | PLAN-02 | Planos | Exceder a cota de scans do plano | Bloqueado com mensagem clara | RestAssured | P1 | 🔲 A fazer |
 | RATE-01 | Rate limit | Exceder o limite configurado por usuário/IP | 429; volta a 200 após a janela | RestAssured | P1 | ⏸️ Adiado — decisão B tomada (ver nota 2026-10-05) |
 
