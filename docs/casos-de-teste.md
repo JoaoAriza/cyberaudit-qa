@@ -44,8 +44,8 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
-| SSRF-01 | Anti-SSRF | Alvo `127.0.0.1`, `localhost`, `::1` | Rejeitado | RestAssured | P0 | 🔲 A fazer |
-| SSRF-02 | Anti-SSRF | Alvo `169.254.169.254`, `10.x`, `192.168.x` | Rejeitado | RestAssured | P0 | 🔲 A fazer |
+| SSRF-01 | Anti-SSRF | Alvo `127.0.0.1`, `localhost`, `::1` | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-11) |
+| SSRF-02 | Anti-SSRF | Alvo `169.254.169.254`, `10.x`, `192.168.x` | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-11) |
 | SSRF-03 | Anti-SSRF | Formas alternativas: `2130706433`, `0x7f000001`, `127.1` | Rejeitado | RestAssured | P0 | 🔲 A fazer |
 | SSRF-04 | Anti-SSRF | Hostname público que resolve para IP privado | Rejeitado | RestAssured | P0 | 🔲 A fazer |
 | SSRF-05 | Anti-SSRF | Alvo externo que redireciona para IP interno | Redirecionamento não seguido | RestAssured + WireMock | P1 | 🔲 A fazer |
