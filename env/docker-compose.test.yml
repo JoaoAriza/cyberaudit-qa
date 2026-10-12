@@ -64,7 +64,11 @@ services:
       # A allowlist que existe SÓ neste profile — ver SsrfTestAllowlistConfig e o
       # caso SSRF-06, que prova que ela não existe fora dele.
       SPRING_PROFILES_ACTIVE: qa-docker
-      SSRF_TEST_ALLOWLIST: juice-shop,wiremock
+      # redirect-mock é um network alias do WireMock (mesmo container) — allowlistado
+      # para o SSRF-05: a URL de ENTRADA passa (host confiável), mas o alvo do redirect
+      # (169.254.169.254) continua bloqueado no hop. Host distinto de "wiremock" → chave
+      # de cache de scan diferente → sem colisão com o AUTHZ-01 (que escaneia wiremock).
+      SSRF_TEST_ALLOWLIST: juice-shop,wiremock,redirect-mock
     # SSRF-04: nomes "públicos" que resolvem para IP interno/privado via /etc/hosts
     # do container — sem depender de DNS externo (nip.io) numa CI isolada. Nenhum
     # deles está na SSRF_TEST_ALLOWLIST, então o guard resolve → vê IP interno →
@@ -163,6 +167,13 @@ services:
     volumes:
       - ./wiremock/mappings:/home/wiremock/mappings
       - ./wiremock/__files:/home/wiremock/__files
+    # Alias extra na rede: o mesmo container responde também como "redirect-mock".
+    # Usado pelo SSRF-05 (host allowlistado, mas com chave de cache distinta de
+    # "wiremock" — evita colidir com o scan de wiremock do AUTHZ-01).
+    networks:
+      default:
+        aliases:
+          - redirect-mock
 
   # Roda uma vez (popula os usuários de seed) e sai — não faz parte do "up"
   # de longa duração. `docker compose ... up seeder` ou aguardar o exit 0 no
