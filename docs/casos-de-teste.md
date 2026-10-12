@@ -46,7 +46,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 |---|---|---|---|---|---|---|
 | SSRF-01 | Anti-SSRF | Alvo `127.0.0.1`, `localhost`, `::1` | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-11) |
 | SSRF-02 | Anti-SSRF | Alvo `169.254.169.254`, `10.x`, `192.168.x` | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-11) |
-| SSRF-03 | Anti-SSRF | Formas alternativas: `2130706433`, `0x7f000001`, `127.1` | Rejeitado | RestAssured | P0 | 🔲 A fazer |
+| SSRF-03 | Anti-SSRF | Formas alternativas: `2130706433`, `0x7f000001`, `127.1` | Rejeitado | RestAssured | P0 | 🐛 Bug (forma hex, `bugs/BUG-02-ssrf-hex-nao-normalizado.md`) — decimal/curto ✅ RestAssured (2026-10-11); hex em teste `@Disabled` até o fix |
 | SSRF-04 | Anti-SSRF | Hostname público que resolve para IP privado | Rejeitado | RestAssured | P0 | 🔲 A fazer |
 | SSRF-05 | Anti-SSRF | Alvo externo que redireciona para IP interno | Redirecionamento não seguido | RestAssured + WireMock | P1 | 🔲 A fazer |
 | SSRF-06 | Anti-SSRF | Allowlist de teste fora do profile `test` | Allowlist inexistente | RestAssured | P0 | 🔲 A fazer |
@@ -206,3 +206,13 @@ vazio) e sem token (401). Cross-account e id-inexistente são indistinguíveis (
 vazio, "não confirma existência") — por isso o controle 200 do dono é obrigatório pra
 provar que o 404 do A é dado escondido, não id inválido. Forja via jjwt com o
 `jwt.secret` do ambiente (dispensa 2FA). Autoria do dono.
+
+## 2026-10-11 — SSRF-03: bug na forma hex (BUG-02)
+
+Verificação do SSRF-03: decimal (`2130706433`) e curta (`127.1`) → 403 DOMAIN_BLOCKED;
+hex (`0x7f000001`) → **200** (não bloqueado, `httpStatus:0`). O guard usa
+`InetAddress.getAllByName`, que converte decimal/curta pra 127.0.0.1 mas não parseia o
+hex → vira hostname que não resolve → o scan segue. Não é exploração (não alcança o
+loopback), mas é gap de normalização. Registrado em `bugs/BUG-02-ssrf-hex-nao-normalizado.md`
+(Backend `8d32e2a`). O teste do SSRF-03 cobre decimal/curto (403) e documenta a forma
+hex como known-issue (ver abaixo) até o fix.

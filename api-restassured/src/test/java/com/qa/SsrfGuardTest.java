@@ -5,6 +5,8 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
@@ -67,6 +69,41 @@ public class SsrfGuardTest extends TestConfig {
                 .header("Authorization", "Bearer " + token)
                 .contentType(ContentType.JSON)
                 .queryParam("url", alvo)
+                .queryParam("active", false)
+                .when()
+                .get("/scan")
+                .then()
+                .statusCode(403)
+                .body("error", equalTo("DOMAIN_BLOCKED"));
+    }
+
+    @ParameterizedTest(name = "SSRF-03: deve bloquear formato alternativo {0}")
+    @ValueSource(strings = {
+            "http://2130706433",
+            "https://127.1"
+    })
+    void deveBloquearFormatosAlternativosLoopback(String alvo) {
+        String token = tokenQaPro();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("url", alvo)
+                .queryParam("active", false)
+                .when()
+                .get("/scan")
+                .then()
+                .statusCode(403)
+                .body("error", equalTo("DOMAIN_BLOCKED"));
+    }
+
+    @Test
+    @Disabled("BUG-02: guard nao normaliza 0x7f000001; reativar quando corrigido -> deve ser 403")
+    void deveBloquarFormatoHexadecimalLoopback() {
+        String token = tokenQaPro();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("url", "http://0x7f000001")
                 .queryParam("active", false)
                 .when()
                 .get("/scan")
