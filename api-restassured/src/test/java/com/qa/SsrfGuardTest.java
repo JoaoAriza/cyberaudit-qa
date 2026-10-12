@@ -111,4 +111,26 @@ public class SsrfGuardTest extends TestConfig {
                 .statusCode(403)
                 .body("error", equalTo("DOMAIN_BLOCKED"));
     }
+
+    @ParameterizedTest(name = "SSRF-04: deve bloquear hostname interno {0}")
+    @ValueSource (strings = {
+            "http://interno-privado.cyberaudit.test",
+            "http://interno-loopback.cyberaudit.test",
+            "http://interno-metadata.cyberaudit.test"
+    })
+    void deveBloquearHostnameQueResolvemParaIpsInternos(String alvo) {
+        String token = tokenQaPro();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("url", alvo)
+                .queryParam("active", false)
+                .when()
+                .get("/scan")
+                .then()
+                .statusCode(403)
+                .body("error", equalTo("DOMAIN_BLOCKED"));
+    }
+
+    
 }
