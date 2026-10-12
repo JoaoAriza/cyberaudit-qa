@@ -132,5 +132,24 @@ public class SsrfGuardTest extends TestConfig {
                 .body("error", equalTo("DOMAIN_BLOCKED"));
     }
 
-    
+    @ParameterizedTest(name = "SSRF-06: deve bloquear backend sem allowlist {0}")
+    @ValueSource (strings = {
+            "http://juice-shop:3000",
+            "http://wiremock:8080"
+    })
+    void deveBloquearBackendSemAllowlist(String alvo) {
+        String token = tokenQaPro();
+
+        given().baseUri
+                        (get("base.uri.noAllowlist")
+                        )
+                .header("Authorization", "Bearer " + token)
+                .queryParam("url", alvo)
+                .queryParam("active", false)
+                .when()
+                .get("/scan")
+                .then()
+                .statusCode(403)
+                .body("error", equalTo("DOMAIN_BLOCKED"));
+    }
 }

@@ -49,7 +49,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SSRF-03 | Anti-SSRF | Formas alternativas: `2130706433`, `0x7f000001`, `127.1` | Rejeitado | RestAssured | P0 | 🐛 Bug (forma hex, `bugs/BUG-02-ssrf-hex-nao-normalizado.md`) — decimal/curto ✅ RestAssured (2026-10-11); hex em teste `@Disabled` até o fix |
 | SSRF-04 | Anti-SSRF | Hostname público que resolve para IP privado | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; hostnames via extra_hosts → IP privado, CI-safe) |
 | SSRF-05 | Anti-SSRF | Alvo externo que redireciona para IP interno | Redirecionamento não seguido | RestAssured + WireMock | P1 | 🔲 A fazer |
-| SSRF-06 | Anti-SSRF | Allowlist de teste fora do profile `test` | Allowlist inexistente | RestAssured | P0 | 🔲 A fazer |
+| SSRF-06 | Anti-SSRF | Allowlist de teste fora do profile `test` | Allowlist inexistente | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; backend 8099 sem profile, juice-shop/wiremock → 403) |
 
 ## Domínio e motor de scan
 
