@@ -65,11 +65,69 @@ services:
       # caso SSRF-06, que prova que ela não existe fora dele.
       SPRING_PROFILES_ACTIVE: qa-docker
       SSRF_TEST_ALLOWLIST: juice-shop,wiremock
+    # SSRF-04: nomes "públicos" que resolvem para IP interno/privado via /etc/hosts
+    # do container — sem depender de DNS externo (nip.io) numa CI isolada. Nenhum
+    # deles está na SSRF_TEST_ALLOWLIST, então o guard resolve → vê IP interno →
+    # 403 DOMAIN_BLOCKED. (extra_hosts só vale ao RECRIAR o container.)
+    extra_hosts:
+      - "interno-privado.cyberaudit.test:10.0.0.1"
+      - "interno-loopback.cyberaudit.test:127.0.0.1"
+      - "interno-metadata.cyberaudit.test:169.254.169.254"
     ports:
       # Publicado pra Cypress/Selenium/RestAssured no host baterem direto na API.
       - "127.0.0.1:8081:8081"
     depends_on:
       postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
+  # Backend GÊMEO do caso SSRF-06. É o MESMO build e os MESMOS envs do `backend`,
+  # com UMA diferença deliberada: NÃO define SPRING_PROFILES_ACTIVE=qa-docker.
+  #
+  # Por que isto prova o SSRF-06: a allowlist anti-SSRF é instalada por um único
+  # bean, SsrfTestAllowlistConfig, anotado @Profile("qa-docker") — é o ÚNICO bean
+  # com esse profile em todo o Backend. Fora do profile o Spring nem instancia a
+  # classe, então SsrfGuard.testAllowlist nunca sai de Set.of(). Repare que
+  # SSRF_TEST_ALLOWLIST continua setado abaixo DE PROPÓSITO: o ponto do caso é que
+  # a variável é lida mas fica inerte sem o profile — nenhum bean a consome. Com
+  # isso, mesmo `juice-shop`/`wiremock` (que aqui resolvem para IP privado do
+  # Docker) caem em 403 DOMAIN_BLOCKED, igual a qualquer alvo interno.
+  #
+  # Compartilha o mesmo Postgres do `backend` (schema já criado por ele) e só sobe
+  # depois dele ficar saudável, pra não haver corrida de ddl-auto=update no schema.
+  # Publicado em 8099 para o RestAssured bater direto (ver base.uri.noAllowlist no
+  # config.properties). Em produção este serviço não existe — é só do ambiente de teste.
+  backend-noallowlist:
+    build:
+      context: ../../Backend
+    environment:
+      PORT: 8081
+      DB_URL: jdbc:postgresql://postgres:5432/cyberaudit_qa
+      DB_USERNAME: cyberaudit_qa
+      DB_PASSWORD: cyberaudit_qa_test_only
+      JWT_SECRET: qa-docker-jwt-secret-32-bytes-minimo-fixo-e-conhecido
+      DOMAIN_VERIFICATION_SECRET: qa-docker-domain-verification-secret-fixo
+      ALLOWED_ORIGINS: http://localhost:8090
+      TRUSTED_PROXY_COUNT: "0"
+      MAIL_ENABLED: "false"
+      PLATFORM_STAFF_EMAILS: qa-enterprise@cyberaudit.test
+      MP_ACCESS_TOKEN: ""
+      NVD_API_KEY: ""
+      SCAN_MAX_CONCURRENT: "4"
+      SCAN_ACQUIRE_TIMEOUT: "20"
+      DNS_CACHE_TTL_SECONDS: "30"
+      # Sem SPRING_PROFILES_ACTIVE: este é o inteiro propósito do serviço.
+      # A linha abaixo fica setada para provar que, fora do profile, ela é inerte.
+      SSRF_TEST_ALLOWLIST: juice-shop,wiremock
+    ports:
+      - "127.0.0.1:8099:8081"
+    depends_on:
+      backend:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/actuator/health"]
