@@ -48,7 +48,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SSRF-02 | Anti-SSRF | Alvo `169.254.169.254`, `10.x`, `192.168.x` | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-11) |
 | SSRF-03 | Anti-SSRF | Formas alternativas: `2130706433`, `0x7f000001`, `127.1` | Rejeitado | RestAssured | P0 | 🐛 Bug (forma hex, `bugs/BUG-02-ssrf-hex-nao-normalizado.md`) — decimal/curto ✅ RestAssured (2026-10-11); hex em teste `@Disabled` até o fix |
 | SSRF-04 | Anti-SSRF | Hostname público que resolve para IP privado | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; hostnames via extra_hosts → IP privado, CI-safe) |
-| SSRF-05 | Anti-SSRF | Alvo externo que redireciona para IP interno | Redirecionamento não seguido | RestAssured + WireMock | P1 | 🔲 A fazer |
+| SSRF-05 | Anti-SSRF | Alvo externo que redireciona para IP interno | Redirecionamento não seguido | RestAssured + WireMock | P1 | ✅ Passou — RestAssured (2026-10-12; redirect 302→interno não seguido, bloqueio no hop) |
 | SSRF-06 | Anti-SSRF | Allowlist de teste fora do profile `test` | Allowlist inexistente | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; backend 8099 sem profile, juice-shop/wiremock → 403) |
 
 ## Domínio e motor de scan
@@ -216,3 +216,14 @@ hex → vira hostname que não resolve → o scan segue. Não é exploração (n
 loopback), mas é gap de normalização. Registrado em `bugs/BUG-02-ssrf-hex-nao-normalizado.md`
 (Backend `8d32e2a`). O teste do SSRF-03 cobre decimal/curto (403) e documenta a forma
 hex como known-issue (ver abaixo) até o fix.
+
+## 2026-10-12 — Bloco anti-SSRF (01–06) fechado
+
+SSRF-01/02/04 (loopback, privados, hostname→IP privado) e SSRF-06 (allowlist inerte
+na 8099) → 403 DOMAIN_BLOCKED. SSRF-03: decimal/curto → 403; forma hex `0x7f000001`
+não normalizada (BUG-02), coberta por teste `@Disabled`. SSRF-05: redirect 302 para
+`169.254.169.254` NÃO é seguido — scan volta 200, `finalUrl` fica na URL de entrada e
+o módulo `headers` marca `error` com "Scan bloqueado... endereço interno/privado". Pra
+isolar o cache de scan (por host, 2 min) do AUTHZ-01, o SSRF-05 usa o alias de rede
+`redirect-mock` (mesmo WireMock, host distinto de "wiremock"); rodados juntos, zero
+colisão. Classes: `SsrfGuardTest` (01-04, 06) e `SsrfRedirectTest` (05). Autoria do dono.
