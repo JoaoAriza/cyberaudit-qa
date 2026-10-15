@@ -56,9 +56,9 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
 | DOM-01 | Domínio | Varredura ativa em domínio não verificado | Recusada | Postman, RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) e Postman (2026-10-06) |
-| SCAN-01 | Motor | Varredura passiva no alvo controlado | Módulos esperados com status OK | RestAssured | P0 | 🐛 Bug suspeito já observado manualmente (ver nota abaixo) — teste formal pendente |
+| SCAN-01 | Motor | Varredura passiva no alvo controlado | Módulos esperados com status OK | RestAssured | P0 | 🐛 Bug reproduzido — `bugs/BUG-03-scan-http-porta-nao-padrao.md` (scan não conecta em HTTP porta não-padrão) |
 | SCAN-02 | Motor | Alvo com atraso forçado no WireMock | Módulo marcado como timeout, relatório indica resultado parcial | RestAssured + WireMock | P1 | 🔲 A fazer |
-| SCAN-03 | Motor | Varredura ativa no Juice Shop | XSS e SQL injection detectados | RestAssured | P0 | 🔲 A fazer |
+| SCAN-03 | Motor | Varredura ativa no Juice Shop | XSS e SQL injection detectados | RestAssured | P0 | 🐛 Bloqueado por SCAN-01/BUG-03 — probes rodam mas nada detectado (httpStatus:0); teste `@Disabled` até o fix |
 | SCAN-04 | Motor | Alvo limpo com headers corretos | Nenhum falso positivo nesses módulos | RestAssured + WireMock | P1 | 🔲 A fazer |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
@@ -227,3 +227,16 @@ o módulo `headers` marca `error` com "Scan bloqueado... endereço interno/priva
 isolar o cache de scan (por host, 2 min) do AUTHZ-01, o SSRF-05 usa o alias de rede
 `redirect-mock` (mesmo WireMock, host distinto de "wiremock"); rodados juntos, zero
 colisão. Classes: `SsrfGuardTest` (01-04, 06) e `SsrfRedirectTest` (05). Autoria do dono.
+
+## 2026-10-15 — SCAN-01 reproduzido (BUG-03), SCAN-03 bloqueado
+
+Verificação do SCAN-03: scan ATIVO de `http://juice-shop:3000/rest/products/search?q=apple`
+(qa-enterprise, staff) → 200 em ~121s, mas `httpStatus:0`, `error:"...HTTP/1.1 header
+parser received no bytes"`, `openPorts:[]`. Gating correto (`inputSurfaceDetected:true`,
+`xssProbePerformed:true`), porém `reflectedXssSuspected:false` e `dbErrorLeakageSuspected:false`
+— o scanner não conecta no alvo HTTP puro em porta não-padrão, então os probes não têm
+resposta pra analisar. Isso reproduz o SCAN-01 (antes "suspeito") e o registra como
+BUG-03 (`bugs/BUG-03-scan-http-porta-nao-padrao.md`, Backend 8d32e2a). SCAN-03 fica 🐛
+bloqueado: teste `@Disabled` guardando a expectativa correta (XSS+SQLi detectados) até o
+fix do motor. Mesmo bug afeta alvos HTTP locais (juice-shop:3000, wiremock:8080) — atenção
+em SCAN-02/04 e SCORE-01.
