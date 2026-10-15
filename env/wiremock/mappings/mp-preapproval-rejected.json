@@ -1,0 +1,20 @@
+{
+  "priority": 1,
+  "metadata": { "caso": "PAY-02", "nota": "Mock do MP: cartão de teste RECUSADO. card_token_id == 'card-recusado' → MP devolve 4xx → o backend surfa 502 BAD_GATEWAY." },
+  "request": {
+    "method": "POST",
+    "urlPath": "/preapproval",
+    "bodyPatterns": [
+      { "matchesJsonPath": "$[?(@.card_token_id == 'card-recusado')]" }
+    ]
+  },
+  "response": {
+    "status": 400,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "message": "Invalid card_token_id",
+      "status": 400,
+      "cause": [ { "code": "3034", "description": "Invalid card token" } ]
+    }
+  }
+}

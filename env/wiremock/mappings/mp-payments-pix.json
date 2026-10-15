@@ -1,0 +1,22 @@
+{
+  "priority": 10,
+  "metadata": { "caso": "PAY-04", "nota": "Mock do MP: POST /v1/payments (Pix) → pending com QR code (qr_code + qr_code_base64 em point_of_interaction.transaction_data)." },
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/payments"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "id": "mp-pix-pagamento-1",
+      "status": "pending",
+      "point_of_interaction": {
+        "transaction_data": {
+          "qr_code": "00020126580014br.gov.bcb.pix0136mock-qr-code-de-teste5204000053039865802BR",
+          "qr_code_base64": "aVZCT1J3MEtHZ29tb2NrLXFyLWltYWdlLWJhc2U2NA=="
+        }
+      }
+    }
+  }
+}

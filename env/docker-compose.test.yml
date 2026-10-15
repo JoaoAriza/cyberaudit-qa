@@ -54,9 +54,13 @@ services:
       # fica de fora, mas por outro motivo: plano FREE já bloqueia scan ativo
       # antes de chegar na checagem de domínio (PLAN-01), nem testa o DOM-01.
       PLATFORM_STAFF_EMAILS: qa-enterprise@cyberaudit.test
-      # Sem token do MP: os testes de pagamento (PAY-*) ficam para quando o
-      # WireMock tiver mappings simulando a API do Mercado Pago — ver docs/.
-      MP_ACCESS_TOKEN: ""
+      # Pagamentos (PAY-*): o MP é MOCKADO no WireMock. MP_BASE_URL aponta o backend
+      # pro WireMock (requer o patch do BASE configurável no Backend), MP_ACCESS_TOKEN
+      # é um valor dummy só pra isConfigured()=true (nunca um token real), e
+      # MP_WEBHOOK_SECRET habilita a validação de assinatura do webhook (PAY-06/08).
+      MP_ACCESS_TOKEN: "TEST-mock-nao-real"
+      MP_BASE_URL: "http://wiremock:8080"
+      MP_WEBHOOK_SECRET: "qa-mp-webhook-secret-de-teste"
       NVD_API_KEY: ""
       SCAN_MAX_CONCURRENT: "4"
       SCAN_ACQUIRE_TIMEOUT: "20"
