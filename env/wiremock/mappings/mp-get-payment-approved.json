@@ -1,0 +1,13 @@
+{
+  "priority": 10,
+  "metadata": { "caso": "PAY-06", "nota": "Mock do MP: GET /v1/payments/{id} → approved + transaction_amount cobrindo o PRO (19.99). É o que o webhook consulta (fonte da verdade). Ecoa o id do path. Para PAY-07 (rejected) será preciso um stub de id específico com status=rejected." },
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/v1/payments/([^/]+)"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"id\":\"{{request.pathSegments.[2]}}\",\"status\":\"approved\",\"transaction_amount\":19.99,\"currency_id\":\"BRL\"}"
+  }
+}

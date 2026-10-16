@@ -1,0 +1,13 @@
+{
+  "priority": 10,
+  "metadata": { "caso": "webhook preapproval (cartão)", "nota": "Mock do MP: GET /preapproval/{id} → authorized. Usado pelo webhook de preapproval e pela consulta de assinatura. Ecoa o id do path." },
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/preapproval/([^/]+)"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"id\":\"{{request.pathSegments.[1]}}\",\"status\":\"authorized\",\"auto_recurring\":{\"transaction_amount\":19.99,\"currency_id\":\"BRL\"}}"
+  }
+}
