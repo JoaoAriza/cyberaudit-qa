@@ -83,9 +83,9 @@ ambiente de teste local (nunca contra produção — Regra 1).
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
 | PAY-01 | Pagamento | Checkout cartão com token válido (sandbox, cartão de teste aprovado) | 200, status AUTHORIZED, plano liberado na hora | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-16; MP mockado no WireMock, conta dedicada qa-pay-card) |
-| PAY-02 | Pagamento | Checkout cartão com token de cartão de teste recusado | 502, plano continua FREE | RestAssured | P0 | 🔲 A fazer |
+| PAY-02 | Pagamento | Checkout cartão com token de cartão de teste recusado | 502, plano continua FREE | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-16; stub rejeita card-recusado, conta qa-free) |
 | PAY-03 | Pagamento | Checkout cartão sem cardTokenId | 400 | Postman, RestAssured | P1 | ⚠️ Parcial — Postman ✅ (2026-10-06); RestAssured pendente |
-| PAY-04 | Pagamento | Checkout Pix com CPF válido | 200, QR code presente, plano continua FREE até confirmação | RestAssured | P0 | 🔲 A fazer |
+| PAY-04 | Pagamento | Checkout Pix com CPF válido | 200, QR code presente, plano continua FREE até confirmação | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-16; mock Pix com id único por chamada, conta qa-pay-pix) |
 | PAY-05 | Pagamento | Checkout Pix com CPF de tamanho inválido | 400 | Postman, RestAssured | P1 | ⚠️ Parcial — Postman ✅ (2026-10-06); RestAssured pendente |
 | PAY-06 | Pagamento | Webhook `payment` approved libera o plano e seta currentPeriodEnd | Plano liberado, período ~30 dias | RestAssured | P0 | 🔲 A fazer |
 | PAY-07 | Pagamento | Webhook `payment` rejected não derruba assinatura Pix já ativa | Status/plano inalterados | RestAssured | P1 | 🔲 A fazer |

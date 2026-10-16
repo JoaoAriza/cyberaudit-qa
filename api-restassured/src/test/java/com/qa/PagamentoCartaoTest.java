@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.containsString;
 
 public class PagamentoCartaoTest extends TestConfig {
 
@@ -23,6 +24,21 @@ public class PagamentoCartaoTest extends TestConfig {
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis()
                 + 3600000))
+                .id(UUID.randomUUID().toString())
+                .signWith(Keys.hmacShaKeyFor(chave))
+                .compact();
+    }
+
+    private String tokenQaPayCardFree() {
+        byte [] chave = get("jwt.secret")
+                .getBytes(StandardCharsets.UTF_8);
+
+        return Jwts.builder()
+                .subject(get("emailFree"))
+                .claim("userIdFree", get("userIdFreePayCard"))
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis()
+                        + 3600000))
                 .id(UUID.randomUUID().toString())
                 .signWith(Keys.hmacShaKeyFor(chave))
                 .compact();
@@ -42,5 +58,21 @@ public class PagamentoCartaoTest extends TestConfig {
                 .statusCode(200)
                 .body("plan", equalTo("PRO"))
                 .body("status", equalTo("AUTHORIZED"));
+    }
+
+    @Test
+    void deveRetornarErroQuandoCartaoForRecusado() {
+        String token = tokenQaPayCardFree();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType("application/json")
+                .body("{\"plan\":\"PRO\",\"cardTokenId\":\"card-recusado\"}")
+                .when()
+                .post("/billing/checkout/card")
+                .then()
+                .statusCode(502)
+                .body("error", equalTo("502 BAD_GATEWAY"))
+                .body("message", containsString("Mercado Pago retornou"));
     }
 }
