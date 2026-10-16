@@ -82,7 +82,7 @@ ambiente de teste local (nunca contra produção — Regra 1).
 
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
-| PAY-01 | Pagamento | Checkout cartão com token válido (sandbox, cartão de teste aprovado) | 200, status AUTHORIZED, plano liberado na hora | RestAssured | P0 | 🔲 A fazer |
+| PAY-01 | Pagamento | Checkout cartão com token válido (sandbox, cartão de teste aprovado) | 200, status AUTHORIZED, plano liberado na hora | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-16; MP mockado no WireMock, conta dedicada qa-pay-card) |
 | PAY-02 | Pagamento | Checkout cartão com token de cartão de teste recusado | 502, plano continua FREE | RestAssured | P0 | 🔲 A fazer |
 | PAY-03 | Pagamento | Checkout cartão sem cardTokenId | 400 | Postman, RestAssured | P1 | ⚠️ Parcial — Postman ✅ (2026-10-06); RestAssured pendente |
 | PAY-04 | Pagamento | Checkout Pix com CPF válido | 200, QR code presente, plano continua FREE até confirmação | RestAssured | P0 | 🔲 A fazer |
@@ -240,3 +240,15 @@ BUG-03 (`bugs/BUG-03-scan-http-porta-nao-padrao.md`, Backend 8d32e2a). SCAN-03 f
 bloqueado: teste `@Disabled` guardando a expectativa correta (XSS+SQLi detectados) até o
 fix do motor. Mesmo bug afeta alvos HTTP locais (juice-shop:3000, wiremock:8080) — atenção
 em SCAN-02/04 e SCORE-01.
+
+## 2026-10-16 — PAY-01 verde (mock do Mercado Pago)
+
+Primeiro caso de pagamento com o MP mockado. Patch no Backend tornou a URL base do MP
+configurável (`mp.base-url`, default produção); no ambiente de teste `MP_BASE_URL` aponta
+pro WireMock, `MP_ACCESS_TOKEN` é dummy (só pra `isConfigured()`), e stubs em
+`env/wiremock/mappings/mp-*.json` simulam preapproval (aprovado/recusado) e payment Pix.
+PAY-01: `POST /billing/checkout/card {cardTokenId:"card-ok"}` → 200, plano PRO, status
+AUTHORIZED. Checkout MUTA estado (upgrade persiste), então cada teste de upgrade usa uma
+conta FREE dedicada (`qa-pay-*` no seed); re-rodar no mesmo ambiente exige reset
+(`down -v` ou UPDATE do plano) — em CI o ambiente é novo a cada run. `card-recusado` é o
+token que o stub rejeita (PAY-02). Autoria do dono.
