@@ -1,6 +1,6 @@
 {
   "priority": 10,
-  "metadata": { "caso": "PAY-01", "nota": "Mock do MP: preapproval (cartão) aprovado. Qualquer card_token_id que não bata na regra 'recusado' cai aqui." },
+  "metadata": { "caso": "PAY-01", "nota": "Mock do MP: preapproval (cartão) aprovado. id ÚNICO por chamada (response templating) — subscriptions.mp_preapproval_id também tem constraint única." },
   "request": {
     "method": "POST",
     "urlPath": "/preapproval"
@@ -8,9 +8,6 @@
   "response": {
     "status": 200,
     "headers": { "Content-Type": "application/json" },
-    "jsonBody": {
-      "id": "mp-preapproval-aprovado-1",
-      "status": "authorized"
-    }
+    "body": "{\"id\":\"mp-preapproval-{{randomValue length=16 type='ALPHANUMERIC'}}\",\"status\":\"authorized\"}"
   }
 }
