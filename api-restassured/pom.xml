@@ -85,6 +85,19 @@
             <version>0.12.6</version>
             <scope>test</scope>
         </dependency>
+
+        <!--
+            Driver JDBC do Postgres — SÓ para o helper de reset de estado dos testes
+            de pagamento (TestConfig.resetarContaParaFree), que devolve a conta para
+            FREE antes de cada teste de upgrade (idempotência de re-execução). Os
+            testes continuam exercitando a API por HTTP; o JDBC é só housekeeping.
+        -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.4</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
