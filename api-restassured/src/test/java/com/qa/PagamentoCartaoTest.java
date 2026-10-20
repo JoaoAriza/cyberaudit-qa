@@ -2,6 +2,7 @@ package com.qa;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -13,6 +14,13 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.containsString;
 
 public class PagamentoCartaoTest extends TestConfig {
+
+    // Idempotência: devolve a conta de upgrade (qa-pay-card) para FREE antes de cada
+    // teste, para o re-run não achar a conta já PRO (409). Ver TestConfig.resetarContaParaFree.
+    @BeforeEach
+    void reset() {
+        resetarContaParaFree(get("emailPayCard"));
+    }
 
     private String tokenQaPayCard() {
         byte [] chave = get("jwt.secret")

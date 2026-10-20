@@ -3,6 +3,7 @@ package com.qa;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import io.restassured.http.ContentType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -19,6 +20,14 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.containsString;
 
 public class PagamentoPixTest extends TestConfig {
+
+    // Idempotência: devolve as contas de upgrade (PAY-14 e PAY-06) para FREE antes de
+    // cada teste, para o re-run não achar a conta já PRO (409). PAY-04/PAY-13 não mutam.
+    @BeforeEach
+    void reset() {
+        resetarContaParaFree(get("emailPayNoCpf"));
+        resetarContaParaFree(get("emailPayWebhook"));
+    }
 
     private String tokenQaPayPix() {
     byte [] chave = get("jwt.secret")
