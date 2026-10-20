@@ -121,3 +121,34 @@ INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
    '$2a$12$MOSJU8sFnD8zZKGbvBgA3OdKOVfQ08BUFB/ybHUnXivlrckV36Ybe', 'OWNER', true, now(),
    'a0000000-0000-0000-0000-00000000eb06', true, now(), 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', true, false)
 ON CONFLICT (email) DO NOTHING;
+
+-- ── PAY-15: conta com Pix AUTHORIZED (antigo) + Pix PENDING (novo) ────────────
+-- Regressão de bug real (corrigido 2026-09-30): GET /billing/subscription deve
+-- devolver a assinatura AUTHORIZED, NÃO a mais recente por data (que é a PENDING).
+-- Caso read-only: o teste só faz GET e asserta status=AUTHORIZED. Cenário fixo.
+INSERT INTO accounts (id, type, plan, display_name, full_name, created_at, require2fa) VALUES
+  ('a0000000-0000-0000-0000-000000000015', 'INDIVIDUAL', 'PRO', 'QA Pay 15', 'QA Pay 15', now(), false)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
+                       account_id, terms_accepted, terms_accepted_at,
+                       totp_secret, totp_enabled, email_otp_enabled) VALUES
+  ('b0000000-0000-0000-0000-000000000015', 'QA Pay 15', 'qa-pay-15@cyberaudit.test',
+   '$2a$12$MOSJU8sFnD8zZKGbvBgA3OdKOVfQ08BUFB/ybHUnXivlrckV36Ybe', 'OWNER', true, now(),
+   'a0000000-0000-0000-0000-000000000015', true, now(), 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', true, false)
+ON CONFLICT (email) DO NOTHING;
+
+-- AUTHORIZED, criada 2 dias ATRÁS (mais antiga), ainda vigente
+INSERT INTO subscriptions (id, account_id, plan, status, payment_method, amount, currency,
+                           mp_payment_id, created_at, current_period_end, updated_at) VALUES
+  ('50000000-0000-0000-0000-0000000015a0', 'a0000000-0000-0000-0000-000000000015',
+   'PRO', 'AUTHORIZED', 'PIX', 19.99, 'BRL', 'pay15-authorized',
+   now() - interval '2 days', now() + interval '28 days', now() - interval '2 days')
+ON CONFLICT (id) DO NOTHING;
+
+-- PENDING, criada AGORA (mais recente) — a "pegadinha" do bug
+INSERT INTO subscriptions (id, account_id, plan, status, payment_method, amount, currency,
+                           mp_payment_id, created_at, updated_at) VALUES
+  ('50000000-0000-0000-0000-0000000015b0', 'a0000000-0000-0000-0000-000000000015',
+   'PRO', 'PENDING', 'PIX', 19.99, 'BRL', 'pay15-pending', now(), now())
+ON CONFLICT (id) DO NOTHING;
