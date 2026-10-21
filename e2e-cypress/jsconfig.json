@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "target": "es2021",
+    "module": "commonjs",
+    "types": ["cypress"]
+  },
+  "include": ["cypress/**/*.js", "cypress.config.js"]
+}
