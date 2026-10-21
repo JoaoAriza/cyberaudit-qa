@@ -91,7 +91,7 @@ ambiente de teste local (nunca contra produção — Regra 1).
 | PAY-07 | Pagamento | Webhook `payment` rejected não derruba assinatura Pix já ativa | Status/plano inalterados | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-21; webhook rejected no-op, continua AUTHORIZED) |
 | PAY-08 | Pagamento | Webhook sem x-signature válido | 401, plano não muda | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-16; 401 "invalid signature", corpo texto puro) |
 | PAY-09 | Pagamento | > 5 tentativas de checkout/minuto pelo mesmo usuário | 429 | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-21; laço até 429, conta dedicada qa-pay-09) |
-| PAY-10 | Pagamento | Job de expiração: assinatura Pix com currentPeriodEnd vencido | Conta rebaixada para FREE | RestAssured (chamada direta ao método, ou expor endpoint de teste) | P1 | 🔲 A fazer |
+| PAY-10 | Pagamento | Job de expiração: assinatura Pix com currentPeriodEnd vencido | Conta rebaixada para FREE | RestAssured (gatilho de teste `/admin/test/expire-pix`, só no profile qa-docker) | P1 | ✅ Passou — RestAssured (2026-10-21; job expira a Pix e rebaixa a conta para FREE) |
 | PAY-11 | Interface | Fluxo completo Pix na tela: QR aparece, copia-e-cola funciona, polling detecta confirmação | Tela mostra "plano ativo" sem reload manual | Cypress | P1 | 🔲 A fazer |
 | PAY-12 | Interface | Fluxo completo cartão na tela: Secure Fields do MP carregam, submit gera token, checkout confirma | Tela mostra "plano ativo" | Cypress | P1 | 🔲 A fazer |
 | PAY-13 | Pagamento | Checkout Pix com CPF de 11 dígitos mas dígito verificador inválido | 400 (`CpfUtil` rejeita desde 2026-09-29) | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-16; "dígito verificador não confere") |
@@ -252,3 +252,14 @@ AUTHORIZED. Checkout MUTA estado (upgrade persiste), então cada teste de upgrad
 conta FREE dedicada (`qa-pay-*` no seed); re-rodar no mesmo ambiente exige reset
 (`down -v` ou UPDATE do plano) — em CI o ambiente é novo a cada run. `card-recusado` é o
 token que o stub rejeita (PAY-02). Autoria do dono.
+
+## 2026-10-21 — Módulo de pagamento (PAY-*) fechado no RestAssured
+
+PAY-01/02/04/06/07/08/09/10/13/14/15 verdes no RestAssured + PAY-03/05 no Postman.
+Os únicos PAY restantes são PAY-11/PAY-12, que são de UI (Cypress). Infra-chave do
+módulo: Mercado Pago mockado no WireMock (patch `mp.base-url` configurável no Backend),
+contas FREE dedicadas por caso que muta estado + `TestConfig.resetarContaParaFree`
+(idempotência via `@BeforeEach`), cenários complexos semeados (PAY-15 AUTHORIZED+PENDING,
+PAY-07 AUTHORIZED, PAY-10 Pix vencida via `prepararPixVencida`), e um gatilho de teste
+`/admin/test/expire-pix` gated por `@Profile("qa-docker")` no Backend para o job de
+expiração (PAY-10). Nenhum teste bate no MP real nem em produção (Regra 1).
