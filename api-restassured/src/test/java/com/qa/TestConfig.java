@@ -69,4 +69,35 @@ public class TestConfig {
             throw new RuntimeException("Falha ao resetar conta para FREE: " + email, e);
         }
     }
+
+    /**
+     * Prepara o cenário do PAY-10: deixa a conta do e-mail em PRO com UMA assinatura
+     * Pix AUTHORIZED cujo {@code current_period_end} já está no passado (vencida). O
+     * job de expiração ({@code /admin/test/expire-pix}) deve então rebaixá-la para
+     * FREE/EXPIRED. Chamar num {@code @BeforeEach} para o teste ser idempotente.
+     */
+    public static void prepararPixVencida(String email) {
+        String delSubs = "DELETE FROM subscriptions WHERE account_id = "
+                + "(SELECT account_id FROM app_users WHERE email = ?)";
+        String setPro = "UPDATE accounts SET plan = 'PRO' WHERE id = "
+                + "(SELECT account_id FROM app_users WHERE email = ?)";
+        String insSub = "INSERT INTO subscriptions "
+                + "(id, account_id, plan, status, payment_method, amount, currency, "
+                + " mp_payment_id, created_at, current_period_end, updated_at) "
+                + "SELECT gen_random_uuid(), account_id, 'PRO', 'AUTHORIZED', 'PIX', 19.99, 'BRL', "
+                + " 'pay10-' || gen_random_uuid(), now() - interval '2 days', "
+                + " now() - interval '1 day', now() "
+                + "FROM app_users WHERE email = ?";
+        try (Connection conn = DriverManager.getConnection(
+                get("db.url"), get("db.user"), get("db.password"))) {
+            for (String sql : new String[]{delSubs, setPro, insSub}) {
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, email);
+                    ps.executeUpdate();
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Falha ao preparar Pix vencida: " + email, e);
+        }
+    }
 }

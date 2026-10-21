@@ -186,3 +186,18 @@ INSERT INTO subscriptions (id, account_id, plan, status, payment_method, amount,
    'PRO', 'AUTHORIZED', 'PIX', 19.99, 'BRL', 'pay07-sub',
    now() - interval '1 day', now() + interval '29 days', now() - interval '1 day')
 ON CONFLICT (id) DO NOTHING;
+
+-- ── PAY-10: conta para o job de expiração de Pix ─────────────────────────────
+-- O helper TestConfig.prepararPixVencida recria, antes de cada teste, uma Pix
+-- AUTHORIZED com currentPeriodEnd no passado nesta conta; o gatilho de teste
+-- /admin/test/expire-pix dispara o job e ela deve cair para FREE/EXPIRED.
+INSERT INTO accounts (id, type, plan, display_name, full_name, created_at, require2fa) VALUES
+  ('a0000000-0000-0000-0000-000000000010', 'INDIVIDUAL', 'FREE', 'QA Pay 10', 'QA Pay 10', now(), false)
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
+                       account_id, terms_accepted, terms_accepted_at,
+                       totp_secret, totp_enabled, email_otp_enabled) VALUES
+  ('b0000000-0000-0000-0000-000000000010', 'QA Pay 10', 'qa-pay-10@cyberaudit.test',
+   '$2a$12$MOSJU8sFnD8zZKGbvBgA3OdKOVfQ08BUFB/ybHUnXivlrckV36Ybe', 'OWNER', true, now(),
+   'a0000000-0000-0000-0000-000000000010', true, now(), 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', true, false)
+ON CONFLICT (email) DO NOTHING;
