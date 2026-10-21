@@ -152,3 +152,17 @@ INSERT INTO subscriptions (id, account_id, plan, status, payment_method, amount,
   ('50000000-0000-0000-0000-0000000015b0', 'a0000000-0000-0000-0000-000000000015',
    'PRO', 'PENDING', 'PIX', 19.99, 'BRL', 'pay15-pending', now(), now())
 ON CONFLICT (id) DO NOTHING;
+
+-- ── PAY-09: conta dedicada ao teste de rate limit de checkout ─────────────────
+-- O teto é 5 checkouts/min POR USUÁRIO (bucket em memória). Conta própria pra o
+-- laço do PAY-09 não esgotar a bucket da qa-free (que PAY-02/03/05/13 usam).
+INSERT INTO accounts (id, type, plan, display_name, full_name, created_at, require2fa) VALUES
+  ('a0000000-0000-0000-0000-000000000009', 'INDIVIDUAL', 'FREE', 'QA Pay 09', 'QA Pay 09', now(), false)
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
+                       account_id, terms_accepted, terms_accepted_at,
+                       totp_secret, totp_enabled, email_otp_enabled) VALUES
+  ('b0000000-0000-0000-0000-000000000009', 'QA Pay 09', 'qa-pay-09@cyberaudit.test',
+   '$2a$12$MOSJU8sFnD8zZKGbvBgA3OdKOVfQ08BUFB/ybHUnXivlrckV36Ybe', 'OWNER', true, now(),
+   'a0000000-0000-0000-0000-000000000009', true, now(), 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', true, false)
+ON CONFLICT (email) DO NOTHING;

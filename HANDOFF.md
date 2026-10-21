@@ -177,3 +177,65 @@ na máquina do dono respondendo 404 — falha confusa, sem "connection refused")
 - **Billing/pagamento:** o contrato completo (checkout cartão/Pix, webhook, erros) está em
   `docs/payment-module-requests.md`. Cartão ainda não foi autorizado de verdade (só a
   rejeição foi testada em produção); Pix foi confirmado de ponta a ponta.
+
+---
+
+## 6. Atualização de estado e convenções (2026-10-20)
+
+Esta seção põe o HANDOFF em dia (as seções 1–5 acima são de 2026-10-03 e ficaram
+desatualizadas). A matriz `docs/casos-de-teste.md` é a fonte da verdade do status caso
+a caso; aqui vai o panorama e os padrões que surgiram.
+
+### Convenção ao passar um caso pro dono escrever
+Ao descrever um caso de teste pro dono implementar, o Claude **explica o QUE o caso
+prova e POR QUE** (o risco/contrato que ele cobre), não só os passos e asserts. Ex.:
+"PAY-09 prova que o teto de 5 checkouts/min por usuário barra abuso de teste de
+cartão". Isso deixa claro o valor do caso (e ajuda no CV). Mantido pelos próximos chats.
+
+### O que já está verde (resumo; detalhe na matriz)
+- **RestAssured (Fase 3):** AUTH-01/02/03, DOM-01, AUTHZ-01, PLAN-01/02, SSRF-01..06
+  (hex do SSRF-03 é bug, ver abaixo), PAY-01/02/04/06/08/13/14/15.
+- **Postman (Fase 2):** AUTH-01, DOM-01, PAY-03, PAY-05 (via Newman; `npm test` com
+  reporter htmlextra; schema do VS Code em `.vscode/settings.json`).
+- **Cypress (Fase 4):** só o scaffold (`e2e-cypress/`, tasks `totp`/`forgeToken`,
+  smoke verde). Specs de UI ainda a escrever pelo dono.
+
+### Bugs reais encontrados (em `docs/bugs/`)
+- **BUG-01** — API key não autentica (LazyInitializationException). Bloqueia AUTH-05.
+- **BUG-02** — SSRF guard não normaliza IPv4 hex (`0x7f000001` passa). SSRF-03 cobre
+  decimal/curto; o hex fica num teste `@Disabled` até o fix.
+- **BUG-03** — scanner não conecta em HTTP puro em porta não-padrão (`httpStatus:0`).
+  Bloqueia SCAN-01/03 (e provavelmente SCAN-02/04, SCORE-01). SCAN-03 fica `@Disabled`.
+
+### Padrões/infra que valem pra continuar
+- **Forja de JWT:** os testes forjam o token HS256 com `jwt.secret` do ambiente (mesmo
+  do `docker-compose.test.yml`), dispensando o 2FA. O `subject` TEM que ser o **e-mail**
+  (o backend carrega o usuário por ele) — erro recorrente foi pôr o userId no subject.
+- **Pagamento (PAY-*):** o MP é **mockado no WireMock**. Precisou de um patch no Backend
+  (`mp.base-url` configurável, default produção) pra apontar `MP_BASE_URL` pro WireMock;
+  `MP_ACCESS_TOKEN` é dummy e `MP_WEBHOOK_SECRET` está setado. Stubs em
+  `env/wiremock/mappings/mp-*.json` (preapproval aprovado/recusado por `card_token_id`,
+  payment Pix com id único, GET payment/preapproval). `card-recusado` é o token que o
+  stub rejeita (→ 502). Webhook: assinatura HMAC-SHA256 do manifest
+  `id:<dataId>;request-id:<reqId>;ts:<ts>;` com o `mpWebhookSecret`.
+- **Isolamento de estado:** checkout que faz upgrade MUTA a conta (vira PRO, persiste).
+  Cada teste de upgrade usa uma **conta FREE dedicada** (`qa-pay-*` no seed) e um
+  `@BeforeEach` chama `TestConfig.resetarContaParaFree(email)` (JDBC, driver postgres no
+  pom) pra devolver a conta a FREE antes de cada teste → idempotente no re-run. Casos
+  que não mutam (recusa, 400, read-only) não precisam. Cenários complexos (ex. PAY-15:
+  AUTHORIZED+PENDING na mesma conta) são **semeados** no `seed.sql`, não criados via API.
+- **Reset manual rápido** (quando precisar, fora do @BeforeEach):
+  `docker exec env-postgres-1 psql -U cyberaudit_qa -d cyberaudit_qa -c "UPDATE accounts SET plan='FREE' WHERE id='<accId>'; DELETE FROM subscriptions WHERE account_id='<accId>';"`
+- **Ambiente caiu / PC reiniciou:** `docker compose -f env/docker-compose.test.yml up -d`
+  (daemon do Docker Desktop precisa estar aberto). Health: `curl http://localhost:8081/actuator/health`.
+
+### Pendências
+- **PAY-07** (webhook rejected não derruba Pix ativa), **PAY-09** (em andamento),
+  **PAY-10** (job de expiração — precisa semear `currentPeriodEnd` vencido e disparar o
+  job; confirmar se dá sem endpoint de teste novo).
+- **RATE-01** — adiado, decisão B (semear usuário não-OWNER; ver nota na matriz).
+- **SCAN-*** bloqueados pelo BUG-03.
+- **Cypress:** specs de UI (UI-01 login 2FA, UI-02 scan+histórico, UI-03, PAY-11/12).
+- **Fase 6 (CI):** Newman + Maven no GitHub Actions, checkout dos 3 repos lado a lado,
+  Allure/relatórios. O `nip.io` do SSRF-04 depende de DNS externo — em CI isolada, trocar
+  pelos hosts `extra_hosts` locais (já no compose).
