@@ -166,3 +166,23 @@ INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
    '$2a$12$MOSJU8sFnD8zZKGbvBgA3OdKOVfQ08BUFB/ybHUnXivlrckV36Ybe', 'OWNER', true, now(),
    'a0000000-0000-0000-0000-000000000009', true, now(), 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', true, false)
 ON CONFLICT (email) DO NOTHING;
+
+-- ── PAY-07: conta com Pix AUTHORIZED ativa (webhook rejected não pode derrubar) ─
+-- A sub tem mp_payment_id conhecido ('pay07-sub') pra o teste mandar um webhook
+-- rejected pra ESSE payment e provar que continua AUTHORIZED (no-op).
+INSERT INTO accounts (id, type, plan, display_name, full_name, created_at, require2fa) VALUES
+  ('a0000000-0000-0000-0000-000000000007', 'INDIVIDUAL', 'PRO', 'QA Pay 07', 'QA Pay 07', now(), false)
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
+                       account_id, terms_accepted, terms_accepted_at,
+                       totp_secret, totp_enabled, email_otp_enabled) VALUES
+  ('b0000000-0000-0000-0000-000000000007', 'QA Pay 07', 'qa-pay-07@cyberaudit.test',
+   '$2a$12$MOSJU8sFnD8zZKGbvBgA3OdKOVfQ08BUFB/ybHUnXivlrckV36Ybe', 'OWNER', true, now(),
+   'a0000000-0000-0000-0000-000000000007', true, now(), 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', true, false)
+ON CONFLICT (email) DO NOTHING;
+INSERT INTO subscriptions (id, account_id, plan, status, payment_method, amount, currency,
+                           mp_payment_id, created_at, current_period_end, updated_at) VALUES
+  ('50000000-0000-0000-0000-0000000007a0', 'a0000000-0000-0000-0000-000000000007',
+   'PRO', 'AUTHORIZED', 'PIX', 19.99, 'BRL', 'pay07-sub',
+   now() - interval '1 day', now() + interval '29 days', now() - interval '1 day')
+ON CONFLICT (id) DO NOTHING;

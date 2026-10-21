@@ -1,0 +1,13 @@
+{
+  "priority": 1,
+  "metadata": { "caso": "PAY-07", "nota": "Mock do MP: GET /v1/payments/pay07-sub → rejected. Prioridade 1 (acima do default approved). O webhook rejected para este payment deve ser no-op e NÃO rebaixar a assinatura AUTHORIZED." },
+  "request": {
+    "method": "GET",
+    "urlPath": "/v1/payments/pay07-sub"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"id\":\"pay07-sub\",\"status\":\"rejected\",\"transaction_amount\":19.99,\"currency_id\":\"BRL\"}"
+  }
+}
