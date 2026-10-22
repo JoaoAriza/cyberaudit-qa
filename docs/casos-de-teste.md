@@ -69,7 +69,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | REP-01 | Relatório | Download do PDF por usuário Pro | `application/pdf` válido, contém os achados do scan (checar com PDFBox) | RestAssured | P1 | 🔲 A fazer |
 | REP-02 | Relatório | Achado conhecido no PDF | Mapeamento LGPD/ISO 27001 presente | RestAssured | P2 | 🔲 A fazer |
 | UI-01 | Interface | Login completo com 2FA | Chega ao dashboard | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress ✅ (2026-10-21; login + TOTP via cy.task → dashboard); Selenium pendente |
-| UI-02 | Interface | Iniciar scan, acompanhar e ver no histórico | Resultado e nota exibidos | Cypress, Selenium | P1 | 🔲 A fazer |
+| UI-02 | Interface | Iniciar scan, acompanhar e ver no histórico | Resultado e nota exibidos | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress ✅ (2026-10-22; scan → nota /100 → histórico, bypass via localStorage); Selenium pendente |
 | UI-03 | Interface | Criar, editar e remover agendamento recorrente | Alterações persistem após recarregar | Cypress | P2 | 🔲 A fazer |
 
 ## Pagamento (checkout transparente — Pix + cartão)
