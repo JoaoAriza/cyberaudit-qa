@@ -201,3 +201,19 @@ INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
    '$2a$12$MOSJU8sFnD8zZKGbvBgA3OdKOVfQ08BUFB/ybHUnXivlrckV36Ybe', 'OWNER', true, now(),
    'a0000000-0000-0000-0000-000000000010', true, now(), 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', true, false)
 ON CONFLICT (email) DO NOTHING;
+
+-- ── PAY-11: conta FREE dedicada ao fluxo Pix na TELA (Cypress/UI) ─────────────
+-- O teste de UI assina o PRO via Pix e confirma por webhook simulado → a conta
+-- vira PRO (muta estado). Conta própria pra não colidir com as contas de pagamento
+-- do RestAssured (que resetam no @BeforeEach) nem com a qa-free. O cy.task('resetFree')
+-- devolve a conta a FREE antes de cada run (idempotente). Mesmo password/TOTP de teste.
+INSERT INTO accounts (id, type, plan, display_name, full_name, created_at, require2fa) VALUES
+  ('a0000000-0000-0000-0000-000000000011', 'INDIVIDUAL', 'FREE', 'QA Pay 11', 'QA Pay 11', now(), false)
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
+                       account_id, terms_accepted, terms_accepted_at,
+                       totp_secret, totp_enabled, email_otp_enabled) VALUES
+  ('b0000000-0000-0000-0000-000000000011', 'QA Pay 11', 'qa-pay-11@cyberaudit.test',
+   '$2a$12$MOSJU8sFnD8zZKGbvBgA3OdKOVfQ08BUFB/ybHUnXivlrckV36Ybe', 'OWNER', true, now(),
+   'a0000000-0000-0000-0000-000000000011', true, now(), 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', true, false)
+ON CONFLICT (email) DO NOTHING;
