@@ -28,7 +28,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | AUTH-01 | Autenticação | Login com credenciais válidas | JWT emitido, acesso liberado | Postman, RestAssured | P0 | ✅ Passou — Postman (2026-10-01) e RestAssured (2026-10-03) |
 | AUTH-02 | Autenticação | Senha errada e usuário inexistente | 401 com a mesma mensagem nos dois casos, sem revelar se o usuário existe | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-03) |
 | AUTH-03 | Autenticação | JWT expirado, assinatura adulterada, `alg: none` | 401 em todos | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) |
-| AUTH-04 | 2FA | Sem código TOTP, código inválido, código reutilizado | Acesso negado nos três | RestAssured, Cypress | P0 | 🔲 A fazer |
+| AUTH-04 | 2FA | Sem código TOTP, código inválido, código reutilizado | Acesso negado nos três | RestAssured, Cypress | P0 | 🐛 Reuso de TOTP não bloqueado (BUG-04, replay do 2º fator) — verificado 2026-10-26; sem-código/inválido → 422 (ok) e controle válido → 200, prontos pra automatizar; reuso fica @Disabled até o fix. Automação adiada (precisa lib TOTP no pom + conta 2FA dedicada) |
 | AUTH-05 | API key | Chamada com API key revogada | 401 | Postman, RestAssured | P1 | 🐛 Bug — API key não autentica (ver `bugs/BUG-01-apikey-auth-lazyinit.md`); automação bloqueada até o fix |
 | AUTHZ-01 | Controle de acesso | Usuário A consulta scan do usuário B pelo ID | 403 ou 404, nunca os dados | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-08) |
 
@@ -312,3 +312,18 @@ print. Nunca com cartão/produção reais (Regra 1).
 Com isso o módulo de pagamento está **fechado**: PAY-01..15 cobertos (API + Pix na UI),
 PAY-12 documentado como manual. Próximos de UI: **PLAN-01 na tela** (P0, Free não exporta
 PDF) e o **Selenium** das telas (fase opcional).
+
+## 2026-10-26 — PLAN-01 na tela verde; AUTH-04 achou bug (TOTP replay), automação adiada
+
+- **PLAN-01 na tela ✅** (`e2e-cypress/cypress/e2e/plan-01-pdf.cy.js`): Free vê o botão "PDF"
+  desabilitado + title "Exportar PDF requer plano PRO ou superior"; controle positivo no Pro
+  (habilitado, outro title). Fecha o P0 nas duas ferramentas (RestAssured já estava).
+- **AUTH-04 → BUG-04 (replay de TOTP), P0.** Verificando o contrato do fluxo 2FA real
+  (`/auth/login` → pré-auth token → `/auth/2fa/verify`), confirmei ao vivo que **o mesmo
+  código TOTP válido pode ser reusado** (2º `verify` com o mesmo código → 200 + nova sessão):
+  o `verifyLoginCode` não consome o código (só o Email OTP marca `used`). Os outros dois
+  sub-casos negam certo (sem código / inválido → 422 `message:"Código TOTP inválido."`).
+  Registrado em `docs/bugs/BUG-04-totp-replay.md`; automação **adiada** (a pedido do dono).
+  Quando for escrever: sub-casos sem-código/inválido + controle válido verdes, reuso
+  `@Disabled` até o fix; precisa de lib de TOTP no `pom.xml` (ex. `dev.samstevens.totp`) e
+  uma conta 2FA dedicada no seed (throttle de 5 falhas/15 min por usuário).
