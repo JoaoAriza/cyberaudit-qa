@@ -111,19 +111,6 @@ module.exports = defineConfig({
           };
         }
       });
-
-      // Na CI (Linux) o browser resolve `localhost` como ::1 (IPv6), mas o backend
-      // so e publicado em 127.0.0.1 (IPv4) pelo docker-compose.test.yml. Sem isto, o
-      // /auth/me do app (XHR cross-origin, no browser) nao conecta na CI -> o bypass
-      // de login "nao loga" e todos os specs logados quebram (so o smoke passa, porque
-      // usa cy.request, que roda no Node e resolve localhost como IPv4, igual ao Java).
-      // Forca o browser (Chromium/Electron) a resolver localhost como IPv4. Inofensivo
-      // no Windows local (onde localhost ja e 127.0.0.1).
-      on('before:browser:launch', (_browser, launchOptions) => {
-        launchOptions.args.push('--host-resolver-rules=MAP localhost 127.0.0.1');
-        return launchOptions;
-      });
-
       return config;
     }
   }
