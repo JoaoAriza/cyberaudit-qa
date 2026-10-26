@@ -98,6 +98,21 @@
             <version>42.7.4</version>
             <scope>test</scope>
         </dependency>
+
+        <!--
+            Apache PDFBox — SÓ para o REP-01 (e REP-02), que baixam o laudo em PDF do
+            endpoint /scan/report/pdf e precisam LER o conteúdo para asseverar que o
+            arquivo é um PDF válido e contém os achados do scan (alvo, nota, findings).
+            O texto do PDF vem em stream comprimido, então grep cru não serve: PDFBox
+            extrai o texto (PDDocument.load(byte[]) + PDFTextStripper). Versão 2.0.x de
+            propósito — a API 2.x é mais simples que a 3.x (que troca o load por Loader).
+        -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>2.0.31</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
