@@ -23,6 +23,7 @@
         <rest-assured.version>5.5.0</rest-assured.version>
         <junit.version>5.11.3</junit.version>
         <assertj.version>3.26.3</assertj.version>
+        <allure.version>2.29.0</allure.version>
     </properties>
 
     <dependencies>
@@ -113,6 +114,21 @@
             <version>2.0.31</version>
             <scope>test</scope>
         </dependency>
+
+        <!--
+            Allure (Fase 6): adapter JUnit 5. Registra-se sozinho como listener da
+            plataforma JUnit (ServiceLoader), então o surefire já escreve os resultados
+            do Allure sem tocar em nenhum teste. Vão para target/allure-results (ver a
+            config do surefire abaixo); a CI junta com os do Newman e do Cypress e gera
+            o relatório unificado. Resultados básicos (teste, status, tempo, @DisplayName)
+            não exigem o aspectjweaver — só seria preciso para @Step/@Attachment.
+        -->
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-junit5</artifactId>
+            <version>${allure.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -128,6 +144,11 @@
                          relatório — não afeta o que os testes fazem. -->
                     <reportFormat>plain</reportFormat>
                     <statelessTestsetInfoReporter implementation="org.apache.maven.plugin.surefire.extensions.junit5.JUnit5StatelessTestsetInfoTreeReporter"/>
+                    <!-- Allure escreve os resultados aqui (em vez do ./allure-results
+                         padrão) para a Cia coletar num caminho previsível. -->
+                    <systemPropertyVariables>
+                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                    </systemPropertyVariables>
                 </configuration>
                 <dependencies>
                     <dependency>

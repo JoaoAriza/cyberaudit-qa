@@ -15,6 +15,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    # contents: write -> o peaceiris empurra o relatorio Allure pro branch gh-pages.
+    permissions:
+      contents: write
     env:
       # Garante o nome de projeto "env" -> containers env-backend-1, env-postgres-1...
       # O cy.task('resetFree') faz `docker exec env-postgres-1`, entao o nome importa.
@@ -98,7 +101,44 @@ jobs:
           working-directory: cyberaudit-qa/e2e-cypress
           browser: electron
 
-      # ── Relatorios nativos como artifact (Allure vem depois) ──────────────
+      # ── Allure: junta os resultados das 3 suites e gera o relatorio unificado ──
+      - name: Collect Allure results
+        if: always()
+        working-directory: cyberaudit-qa
+        run: |
+          mkdir -p allure-results
+          cp -r api-restassured/target/allure-results/. allure-results/ 2>/dev/null || true
+          cp -r api-postman/allure-results/.            allure-results/ 2>/dev/null || true
+          cp -r e2e-cypress/allure-results/.            allure-results/ 2>/dev/null || true
+          echo "resultados Allure coletados: $(ls -1 allure-results 2>/dev/null | wc -l) arquivos"
+
+      - name: Generate Allure report
+        if: always()
+        working-directory: cyberaudit-qa
+        run: |
+          curl -sL -o /tmp/allure.tgz \
+            https://github.com/allure-framework/allure2/releases/download/2.29.0/allure-2.29.0.tgz
+          tar -xzf /tmp/allure.tgz -C /tmp
+          /tmp/allure-2.29.0/bin/allure generate allure-results --clean -o allure-report
+
+      - name: Upload Allure report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: cyberaudit-qa/allure-report
+          if-no-files-found: ignore
+
+      # So publica no site (gh-pages) em push na main — PRs nao publicam.
+      - name: Publish Allure to GitHub Pages
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: cyberaudit-qa/allure-report
+
+      # ── Relatorios nativos como artifact (htmlextra/surefire/screenshots) ──
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4

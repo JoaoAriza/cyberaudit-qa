@@ -5,6 +5,9 @@
 // Quando criar o commands.js, descomente a linha abaixo:
 // import './commands';
 
+// Allure (Fase 6): registra os comandos/eventos que escrevem os resultados do Cypress.
+require('@shelex/cypress-allure-plugin');
+
 // Fixa o idioma do app em pt-BR em TODAS as specs, antes de cada carga de pagina.
 // Sem isto, o app segue o navigator.language (ver Frontend i18n/catalog.ts,
 // idiomaAtual): no runner da CI (Linux, locale en-US) ele renderiza em INGLES, e os

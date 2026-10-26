@@ -1,0 +1,9 @@
+# Artefatos gerados pelo Allure / CI — nunca versionar.
+# O padrao sem barra no inicio casa a pasta em qualquer nivel (raiz e subprojetos).
+allure-results/
+allure-report/
+
+# Pasta-lixo do Maven: a propriedade ${project.build.directory} nao foi resolvida em
+# algum ponto e virou um diretorio literal em api-restassured/. (target/ ja e ignorado
+# la dentro.)
+${project.build.directory}/

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "newman run collection.json -e environment.local.json -r cli,htmlextra"
+    "test": "newman run collection.json -e environment.local.json -r cli,htmlextra,allure --reporter-allure-export allure-results"
   },
   "keywords": [],
   "author": "",
@@ -11,6 +11,7 @@
   "description": "",
   "devDependencies": {
     "newman": "^6.2.2",
+    "newman-reporter-allure": "^3.14.0",
     "newman-reporter-htmlextra": "^1.23.1"
   }
 }

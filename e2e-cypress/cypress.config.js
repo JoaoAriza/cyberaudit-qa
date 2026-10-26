@@ -2,6 +2,8 @@ const { defineConfig } = require('cypress');
 const { authenticator } = require('otplib');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
+// Allure (Fase 6): escreve os resultados do Cypress para o relatorio unificado da CI.
+const allureWriter = require('@shelex/cypress-allure-plugin/writer');
 
 // base64url de um Buffer/string (sem padding) — mesmo formato de JWT do backend.
 function b64url(input) {
@@ -41,7 +43,10 @@ module.exports = defineConfig({
       accountIdPay11: 'a0000000-0000-0000-0000-000000000011',
       // Secret do webhook do MP (= MP_WEBHOOK_SECRET do docker-compose.test.yml). So de
       // teste (Regra 4). Usado pelo cy.task('signMpWebhook') pra assinar o webhook simulado.
-      mpWebhookSecret: 'qa-mp-webhook-secret-de-teste'
+      mpWebhookSecret: 'qa-mp-webhook-secret-de-teste',
+      // Liga a escrita de resultados do Allure (Fase 6). Sempre on: cria allure-results/
+      // local tambem, mas e' gitignorado; a CI coleta essa pasta pro relatorio unificado.
+      allure: true
     },
     setupNodeEvents(on, config) {
       on('task', {
@@ -111,6 +116,8 @@ module.exports = defineConfig({
           };
         }
       });
+
+      allureWriter(on, config);
       return config;
     }
   }
