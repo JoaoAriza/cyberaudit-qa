@@ -92,7 +92,7 @@ ambiente de teste local (nunca contra produção — Regra 1).
 | PAY-08 | Pagamento | Webhook sem x-signature válido | 401, plano não muda | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-16; 401 "invalid signature", corpo texto puro) |
 | PAY-09 | Pagamento | > 5 tentativas de checkout/minuto pelo mesmo usuário | 429 | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-21; laço até 429, conta dedicada qa-pay-09) |
 | PAY-10 | Pagamento | Job de expiração: assinatura Pix com currentPeriodEnd vencido | Conta rebaixada para FREE | RestAssured (gatilho de teste `/admin/test/expire-pix`, só no profile qa-docker) | P1 | ✅ Passou — RestAssured (2026-10-21; job expira a Pix e rebaixa a conta para FREE) |
-| PAY-11 | Interface | Fluxo completo Pix na tela: QR aparece, copia-e-cola funciona, polling detecta confirmação | Tela mostra "plano ativo" sem reload manual | Cypress | P1 | 🔲 A fazer |
+| PAY-11 | Interface | Fluxo completo Pix na tela: QR aparece, copia-e-cola funciona, polling detecta confirmação | Tela mostra "plano ativo" sem reload manual | Cypress | P1 | ✅ Passou — Cypress (2026-10-26; conta dedicada qa-pay-11 + resetFree, webhook simulado via signMpWebhook, sucesso = card Pro vira "Cancelar assinatura"; idempotente no re-run) |
 | PAY-12 | Interface | Fluxo completo cartão na tela: Secure Fields do MP carregam, submit gera token, checkout confirma | Tela mostra "plano ativo" | Cypress | P1 | 🔲 A fazer |
 | PAY-13 | Pagamento | Checkout Pix com CPF de 11 dígitos mas dígito verificador inválido | 400 (`CpfUtil` rejeita desde 2026-09-29) | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-16; "dígito verificador não confere") |
 | PAY-14 | Pagamento | Checkout cartão sem CPF nenhum (cliente estrangeiro) | 200/token gerado — CPF é opcional desde 2026-09-30, backend nunca recebeu CPF nesse fluxo | RestAssured, Cypress | P1 | ⚠️ Parcial — RestAssured ✅ (2026-10-16, conta qa-pay-nocpf); Cypress pendente |
@@ -263,3 +263,19 @@ contas FREE dedicadas por caso que muta estado + `TestConfig.resetarContaParaFre
 PAY-07 AUTHORIZED, PAY-10 Pix vencida via `prepararPixVencida`), e um gatilho de teste
 `/admin/test/expire-pix` gated por `@Profile("qa-docker")` no Backend para o job de
 expiração (PAY-10). Nenhum teste bate no MP real nem em produção (Regra 1).
+
+## 2026-10-26 — PAY-11 (Pix na tela) verde no Cypress
+
+`e2e-cypress/cypress/e2e/ui-11-pix.cy.js` fecha o fluxo Pix na UI: badge FREE → Planos →
+Assinar Pro → aba Pix → CPF → Gerar Pix → QR + copia-e-cola (stub do `navigator.clipboard`)
+→ webhook simulado → polling detecta e a tela mostra o plano ativo sem reload. Autoria do
+dono; o Claude só revisou/rodou. Infra nova (Claude): conta FREE dedicada `qa-pay-11`
+(seed + chaves no `cypress.config.js`) e dois `cy.task` — `resetFree` (devolve a conta a
+FREE via psql do container, no `beforeEach` → idempotente no re-run) e `signMpWebhook`
+(assina o webhook HMAC-SHA256 com o `mpWebhookSecret` e devolve headers+body prontos). O
+`cy.request` do webhook vai pro `Cypress.env('apiUrl')` (8081), não pro `baseUrl` (8090).
+Armadilha registrada: no sucesso o `onSuccess` fecha só o CheckoutModal, o PlansModal
+continua aberto cobrindo o header — por isso a prova de sucesso é o card Pro virar
+"Cancelar assinatura" (visível no modal aberto), não o badge PRO do header (coberto).
+Restam só PAY-12 (cartão na tela, Secure Fields em iframe cross-origin — provável inviável
+no Cypress) e o Selenium das telas (fase opcional).
