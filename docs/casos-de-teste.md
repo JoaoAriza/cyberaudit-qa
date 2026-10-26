@@ -93,7 +93,7 @@ ambiente de teste local (nunca contra produção — Regra 1).
 | PAY-09 | Pagamento | > 5 tentativas de checkout/minuto pelo mesmo usuário | 429 | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-21; laço até 429, conta dedicada qa-pay-09) |
 | PAY-10 | Pagamento | Job de expiração: assinatura Pix com currentPeriodEnd vencido | Conta rebaixada para FREE | RestAssured (gatilho de teste `/admin/test/expire-pix`, só no profile qa-docker) | P1 | ✅ Passou — RestAssured (2026-10-21; job expira a Pix e rebaixa a conta para FREE) |
 | PAY-11 | Interface | Fluxo completo Pix na tela: QR aparece, copia-e-cola funciona, polling detecta confirmação | Tela mostra "plano ativo" sem reload manual | Cypress | P1 | ✅ Passou — Cypress (2026-10-26; conta dedicada qa-pay-11 + resetFree, webhook simulado via signMpWebhook, sucesso = card Pro vira "Cancelar assinatura"; idempotente no re-run) |
-| PAY-12 | Interface | Fluxo completo cartão na tela: Secure Fields do MP carregam, submit gera token, checkout confirma | Tela mostra "plano ativo" | Cypress | P1 | 🔲 A fazer |
+| PAY-12 | Interface | Fluxo completo cartão na tela: Secure Fields do MP carregam, submit gera token, checkout confirma | Tela mostra "plano ativo" | Cypress / Manual | P1 | ⚠️ Coberto por API (PAY-01/02/14) + verificação manual — E2E no Cypress inviável (Secure Fields em iframe cross-origin + tokenização no MP real); decisão 2026-10-26 (ver nota) |
 | PAY-13 | Pagamento | Checkout Pix com CPF de 11 dígitos mas dígito verificador inválido | 400 (`CpfUtil` rejeita desde 2026-09-29) | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-16; "dígito verificador não confere") |
 | PAY-14 | Pagamento | Checkout cartão sem CPF nenhum (cliente estrangeiro) | 200/token gerado — CPF é opcional desde 2026-09-30, backend nunca recebeu CPF nesse fluxo | RestAssured, Cypress | P1 | ⚠️ Parcial — RestAssured ✅ (2026-10-16, conta qa-pay-nocpf); Cypress pendente |
 | PAY-15 | Pagamento | `GET /billing/subscription` com um Pix AUTHORIZED mais antigo e um Pix PENDING mais novo na mesma conta | Devolve o AUTHORIZED, não o mais recente por data — regressão do bug corrigido em 2026-09-30 (`currentSubscription()`) | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-20; cenário semeado, GET devolve AUTHORIZED) |
@@ -279,3 +279,36 @@ continua aberto cobrindo o header — por isso a prova de sucesso é o card Pro 
 "Cancelar assinatura" (visível no modal aberto), não o badge PRO do header (coberto).
 Restam só PAY-12 (cartão na tela, Secure Fields em iframe cross-origin — provável inviável
 no Cypress) e o Selenium das telas (fase opcional).
+
+## 2026-10-26 — PAY-12 (cartão na tela): E2E inviável no Cypress, coberto por API + manual
+
+Decisão (dono, 2026-10-26): **opção A** — não automatizar o fluxo de cartão no Cypress.
+Verificado no código e ao vivo: os três campos de cartão (número, validade, CVV) são
+**iframes servidos de `https://secure-fields.mercadopago.com/`** (origem ≠ `localhost:8090`),
+e o Cypress não digita em iframe cross-origin. Além disso o `createCardToken` do SDK vai pro
+**MP real** (o build do 8090 tem chave de **produção** `APP_USR-…` em `Frontend/.env`), e o
+WireMock só intercepta as chamadas do **backend** ao MP, não as do navegador — ou seja, a
+tokenização sairia do ambiente e bateria em produção (fere a Regra 1). Logo, o E2E "de
+verdade" é inviável. (Alternativa avaliada e descartada: mockar `window.MercadoPago` — dá
+verde no Cypress porque `loadMercadoPagoSdk` faz `if (window.MercadoPago) return`, mas dubla
+justamente os Secure Fields e a tokenização, então provaria só a cola de UI, que o PAY-01 de
+API já cobre; não compensa o acoplamento ao SDK + o risco de falsa cobertura.)
+
+**Cobertura efetiva:** a lógica de checkout de cartão está nos testes de API — PAY-01
+(token válido → AUTHORIZED/PRO), PAY-02 (token recusado → 502/FREE), PAY-14 (sem CPF →
+AUTHORIZED) — todos com o MP mockado no WireMock. A casca de UI do cartão fica como
+**verificação manual roteirizada**.
+
+**Roteiro manual (repetível):** pré-requisito — trocar a `VITE_MP_PUBLIC_KEY` do build do
+frontend por uma chave **de sandbox** (`TEST-…`) antes do teste; com a chave de produção
+atual os cartões de teste do MP são rejeitados (gap de config a resolver quando for rodar o
+manual). Com a chave sandbox: 1) subir o ambiente, logar numa conta FREE; 2) badge do plano
+→ Planos → Assinar "Pessoal Pro" → aba **Cartão**; 3) conferir que os três Secure Fields
+montam (iframes de `secure-fields.mercadopago.com`) e o "Pagar" habilita; 4) preencher Nome,
+e um **cartão de teste aprovado do MP** nos iframes; 5) **Pagar** → esperar o estado de
+sucesso (plano ativo — igual ao PAY-11, o card Pro vira "Cancelar assinatura"). Registrar
+print. Nunca com cartão/produção reais (Regra 1).
+
+Com isso o módulo de pagamento está **fechado**: PAY-01..15 cobertos (API + Pix na UI),
+PAY-12 documentado como manual. Próximos de UI: **PLAN-01 na tela** (P0, Free não exporta
+PDF) e o **Selenium** das telas (fase opcional).
