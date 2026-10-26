@@ -1,0 +1,13 @@
+pm.test("DOM-01 - Status 403", function () {
+    pm.response.to.have.status(403);
+});
+
+pm.test("DOM-01 - Erro de domínio não verificado", function () {
+    const body = pm.response.json();
+    pm.expect(body.error).to.eql("ACCOUNT_DOMAIN_NOT_VERIFIED");
+});
+
+pm.test("DOM-01 - Host correto", function () {
+    const body = pm.response.json();
+    pm.expect(body.host).to.eql("juice-shop:3000");
+});

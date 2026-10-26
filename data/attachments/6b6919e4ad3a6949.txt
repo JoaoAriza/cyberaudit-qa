@@ -1,0 +1,11 @@
+pm.test("PAY-05 - Status 400", function () {
+    pm.response.to.have.status(400);
+});
+pm.test("PAY-05 - Erro BAD_REQUEST", function () {
+const body = pm.response.json();
+pm.expect(body.error).to.eql("400 BAD_REQUEST");
+});
+pm.test("PAY-05 - Mensagem indica CPF com quantidade inválida de dígitos", function () {
+    const body = pm.response.json();
+    pm.expect(body.message).to.include("informe os 11 dígitos")
+});

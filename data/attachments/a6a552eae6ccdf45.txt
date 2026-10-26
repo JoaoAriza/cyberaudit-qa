@@ -1,0 +1,8 @@
+pm.test("DOM-01 - Sem autenticação retorna 401", function () {
+    pm.response.to.have.status(401);
+});
+
+pm.test("DOM-01 - Erro de autenticação", function () {
+    const body = pm.response.json();
+    pm.expect(body.error).to.eql("401 UNAUTHORIZED");
+});
