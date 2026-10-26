@@ -1,0 +1,132 @@
+name: CI
+
+# Fase 6 do plano de teste: sobe o ambiente Docker (os 3 repos lado a lado) e roda
+# as 3 suites (RestAssured, Newman/Postman, Cypress) contra ele, num unico job.
+# Relatorios nativos saem como artifact. Allure vem como proximo passo.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # Garante o nome de projeto "env" -> containers env-backend-1, env-postgres-1...
+      # O cy.task('resetFree') faz `docker exec env-postgres-1`, entao o nome importa.
+      COMPOSE_PROJECT_NAME: env
+
+    steps:
+      # ── Checkout dos 3 repos LADO A LADO ──────────────────────────────────
+      # O docker-compose.test.yml constroi o backend de ../../Backend e o frontend
+      # de ../../Frontend (relativo a cyberaudit-qa/env/). Com os 3 como irmaos no
+      # workspace, esses caminhos resolvem. Backend/Frontend sao publicos -> o
+      # GITHUB_TOKEN padrao le sem PAT.
+      - name: Checkout cyberaudit-qa
+        uses: actions/checkout@v4
+        with:
+          path: cyberaudit-qa
+
+      - name: Checkout cyberaudit-backend
+        uses: actions/checkout@v4
+        with:
+          repository: JoaoAriza/cyberaudit-backend
+          path: Backend
+
+      - name: Checkout cyberaudit-frontend
+        uses: actions/checkout@v4
+        with:
+          repository: JoaoAriza/cyberaudit-frontend
+          path: Frontend
+
+      # ── Toolchains ────────────────────────────────────────────────────────
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── Sobe o ambiente de teste (5 servicos + seeder) ────────────────────
+      - name: Start test environment
+        working-directory: cyberaudit-qa
+        run: docker compose -f env/docker-compose.test.yml up --build -d
+
+      - name: Wait for environment to be ready
+        run: |
+          set -e
+          echo "Backend (8081)..."
+          timeout 360 bash -c 'until curl -fsS http://localhost:8081/actuator/health >/dev/null; do sleep 5; done'
+          echo "Backend-noallowlist (8099)..."
+          timeout 180 bash -c 'until curl -fsS http://localhost:8099/actuator/health >/dev/null; do sleep 5; done'
+          echo "Frontend (8090)..."
+          timeout 180 bash -c 'until curl -fsS http://localhost:8090 >/dev/null; do sleep 5; done'
+          echo "Seeder (precisa terminar com exit 0 antes dos testes)..."
+          code=$(docker wait env-seeder-1)
+          echo "seeder exit code: $code"
+          test "$code" = "0"
+
+      # ── Suites (continue-on-error: roda as 3 e agrega no fim) ─────────────
+      - name: RestAssured (API)
+        id: restassured
+        continue-on-error: true
+        working-directory: cyberaudit-qa/api-restassured
+        run: mvn -B test
+
+      - name: Newman (Postman)
+        id: newman
+        continue-on-error: true
+        working-directory: cyberaudit-qa/api-postman
+        run: |
+          npm ci
+          npm test
+
+      - name: Cypress (E2E)
+        id: cypress
+        continue-on-error: true
+        uses: cypress-io/github-action@v6
+        with:
+          working-directory: cyberaudit-qa/e2e-cypress
+          browser: electron
+
+      # ── Relatorios nativos como artifact (Allure vem depois) ──────────────
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          if-no-files-found: ignore
+          path: |
+            cyberaudit-qa/api-postman/newman/**
+            cyberaudit-qa/api-restassured/target/surefire-reports/**
+            cyberaudit-qa/e2e-cypress/cypress/screenshots/**
+
+      # ── Logs do ambiente se algo quebrar (ajuda a debugar a primeira run) ──
+      - name: Dump docker compose logs
+        if: failure()
+        working-directory: cyberaudit-qa
+        run: docker compose -f env/docker-compose.test.yml logs --no-color --tail 200
+
+      # ── Gate: job fica vermelho se qualquer suite falhou ──────────────────
+      - name: Fail if any suite failed
+        if: always()
+        run: |
+          echo "RestAssured: ${{ steps.restassured.outcome }}"
+          echo "Newman:      ${{ steps.newman.outcome }}"
+          echo "Cypress:     ${{ steps.cypress.outcome }}"
+          if [ "${{ steps.restassured.outcome }}" != "success" ] || \
+             [ "${{ steps.newman.outcome }}" != "success" ] || \
+             [ "${{ steps.cypress.outcome }}" != "success" ]; then
+            echo "::error::Pelo menos uma suite falhou."
+            exit 1
+          fi
+          echo "Todas as suites passaram."

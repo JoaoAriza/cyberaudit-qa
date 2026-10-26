@@ -9,7 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import static io.restassured.RestAssured.*;
 import static org.hamcrest.Matchers.*;
 
-public class AuthTest extends TestConfig {
+public class AuthTest2 extends TestConfig {
     private static final String MENSAGEM_ERRO_ESPERADA = "Autenticação necessária.";
 
     @Test

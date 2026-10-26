@@ -66,8 +66,8 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
-| REP-01 | Relatório | Download do PDF por usuário Pro | `application/pdf` válido, contém os achados do scan (checar com PDFBox) | RestAssured | P1 | 🔲 A fazer |
-| REP-02 | Relatório | Achado conhecido no PDF | Mapeamento LGPD/ISO 27001 presente | RestAssured | P2 | 🔲 A fazer |
+| REP-01 | Relatório | Download do PDF por usuário Pro | `application/pdf` válido, contém os achados do scan (checar com PDFBox) | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-26; qa-enterprise → `GET /scan/report/pdf` → 200 `application/pdf`, magic `%PDF`, PDFBox confirma alvo + achados. Ator é enterprise, não qa-pro: PRO pessoal é verified-only e não tem domínio verificado. PDFBox 2.0.31 no pom) |
+| REP-02 | Relatório | Achado conhecido no resultado do scan → mapeado para a norma | Mapeamento LGPD/ISO 27001 presente no `compliance` do `GET /scan` (NÃO no PDF — verificado 2026-10-26, o laudo exportável não traz o mapeamento) | RestAssured | P2 | ✅ Passou — RestAssured (2026-10-26; `GET /scan` → `compliance.lgpdItems`/`isoItems` presentes, achado conhecido mapeado: Art. 46 FAIL + A.8.24 FAIL). Escopo corrigido (estava "no PDF"; o mapeamento é na API) |
 | UI-01 | Interface | Login completo com 2FA | Chega ao dashboard | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress ✅ (2026-10-21; login + TOTP via cy.task → dashboard); Selenium pendente |
 | UI-02 | Interface | Iniciar scan, acompanhar e ver no histórico | Resultado e nota exibidos | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress ✅ (2026-10-22; scan → nota /100 → histórico, bypass via localStorage); Selenium pendente |
 | UI-03 | Interface | Criar, editar e remover agendamento recorrente | Alterações persistem após recarregar | Cypress | P2 | ✅ Passou — Cypress (2026-10-23; criar → pausar → persistir no reload → remover; host único idempotente) |
@@ -327,3 +327,19 @@ PDF) e o **Selenium** das telas (fase opcional).
   Quando for escrever: sub-casos sem-código/inválido + controle válido verdes, reuso
   `@Disabled` até o fix; precisa de lib de TOTP no `pom.xml` (ex. `dev.samstevens.totp`) e
   uma conta 2FA dedicada no seed (throttle de 5 falhas/15 min por usuário).
+
+## 2026-10-26 — REP-01 verde; REP-02 reescopado (mapeamento está na API, não no PDF)
+
+- **REP-01 ✅** (`RelatorioPdfTest`, RestAssured): qa-enterprise → `GET /scan/report/pdf` →
+  200 `application/pdf`, magic `%PDF`, PDFBox (2.0.31, novo no pom) confirma alvo + achados.
+  Ator é enterprise de propósito: qa-pro é PRO pessoal `reportOnVerifiedOnly` sem domínio
+  verificado → `checkReportDelivery` bloqueia (402/403).
+- **REP-02 reescopado.** A matriz dizia "mapeamento LGPD/ISO no PDF", mas a extração completa
+  do PDF do REP-01 não tem LGPD/ISO nenhum. O mapeamento (`ComplianceMappingService` →
+  `ComplianceReport`) vem no **JSON do `GET /scan`**, campo `compliance`
+  (`lgpdItems` "Art. 46".."50", `isoItems` "A.8.x"/"A.5.x", cada um com PASS/FAIL +
+  `overallScore`/`riskLevel`). REP-02 vira teste de **API** (RestAssured sobre o JSON), sem
+  PDFBox. Confirmado ao vivo (qa-enterprise, wiremock:8080/health): Art. 46 FAIL, A.8.24
+  (criptografia) FAIL — coerente com o alvo HTTP sem HTTPS/cert inválido.
+- **Observação de produto (não é bug):** o PDF exportável — o arquivo que vai pra auditoria —
+  **não inclui** o mapeamento de compliance que a UI/API mostram. Candidato a melhoria futura.

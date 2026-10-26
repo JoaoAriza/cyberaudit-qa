@@ -205,7 +205,7 @@ public class AuthTokenTest extends TestConfig {
     }
 
     @Test
-    @DisplayName("AUTH-03 - Deve recusar requisiçãp sem token")
+    @DisplayName("AUTH-03 - Deve recusar requisição sem token")
     public void deveRecusarSemToken() {
 
         given()

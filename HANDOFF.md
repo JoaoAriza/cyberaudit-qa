@@ -239,3 +239,141 @@ cartão". Isso deixa claro o valor do caso (e ajuda no CV). Mantido pelos próxi
 - **Fase 6 (CI):** Newman + Maven no GitHub Actions, checkout dos 3 repos lado a lado,
   Allure/relatórios. O `nip.io` do SSRF-04 depende de DNS externo — em CI isolada, trocar
   pelos hosts `extra_hosts` locais (já no compose).
+
+---
+
+## 7. Atualização de estado (2026-10-23) — fim de módulo de pagamento + Cypress iniciado
+
+Continua valendo a convenção da seção 6 (descrever o QUE/POR QUE de cada caso). A
+matriz `docs/casos-de-teste.md` é a fonte da verdade do status.
+
+### Progresso desde a seção 6
+- **Módulo de pagamento FECHADO no RestAssured:** além dos já verdes, entraram
+  **PAY-07** (webhook rejected não derruba Pix ativa), **PAY-09** (teto 5 checkout/min
+  → 429), **PAY-10** (job de expiração rebaixa pra FREE) e **PAY-15** (subscription
+  prioriza AUTHORIZED). Restam só PAY-11/PAY-12, que são de UI (Cypress).
+- **Cypress (Fase 4) ANDANDO:** scaffold + **UI-01** (login 2FA real), **UI-02**
+  (scan → nota → histórico) e **UI-03** (CRUD de agendamento) verdes. Faltam
+  **PLAN-01 na tela**, **PAY-11** (Pix na UI) e **PAY-12** (cartão na UI).
+
+### Infra nova de pagamento (além do mock MP da seção 6)
+- **Contas/cenários semeados** (`env/seed.sql`, chaves em `config.properties`):
+  `qa-pay-07` (Pix AUTHORIZED ativa, mp_payment_id `pay07-sub`), `qa-pay-09` (rate
+  limit), `qa-pay-10` (job de expiração), `qa-pay-15` (AUTHORIZED antigo + PENDING
+  novo). Cenários complexos são **semeados**, não criados por API.
+- **Stub webhook rejected:** `env/wiremock/mappings/mp-get-payment-rejected.json`
+  (GET /v1/payments/pay07-sub → rejected, prioridade 1).
+- **Gatilho de teste no Backend:** `TestBillingController` (`@Profile("qa-docker")`,
+  `POST /admin/test/expire-pix`) dispara o job `expirarAssinaturasPixVencidas` pro
+  PAY-10 testar por API. **Só existe no profile de teste.** Helper
+  `TestConfig.prepararPixVencida(email)` (JDBC) monta a Pix vencida no `@BeforeEach`.
+- **Idempotência:** testes de upgrade usam `@BeforeEach { resetarContaParaFree(...) }`
+  (JDBC, driver postgres no pom). Checkout **muta** a conta (vira PRO, persiste).
+- **Plano da CONTA** (pós-expiração/downgrade) está em `GET /auth/me` → `account.plan`
+  (NÃO no `GET /billing/subscription`, que mostra o plano da assinatura).
+- **Webhook válido:** assinatura HMAC-SHA256 de `id:<dataId>;request-id:<reqId>;ts:<ts>;`
+  com `mpWebhookSecret`; header `x-signature: ts=<ts>,v1=<hex-minusculo>` (a vírgula
+  entre ts e v1 foi erro recorrente). type `"payment"` exato; `data.id` = paymentId.
+
+### Cypress — como está montado e rodar
+- Projeto em `e2e-cypress/`. Rodar: `cd e2e-cypress && npm run cy:run` (headless) ou
+  `npm run cy:open` (interativo); `-- --spec cypress/e2e/<arquivo>` roda um só.
+  Precisa do **frontend (8090) + backend (8081)** no ar.
+- **Specs ficam em `cypress/e2e/*.cy.js`** (o `specPattern`); na raiz não roda.
+- Tasks (em `cypress.config.js`): **`cy.task('totp')`** (código 2FA do segredo do seed,
+  pro login real do UI-01) e **`cy.task('forgeToken', {email})`** (JWT de sessão pro
+  bypass). Config/env (emails, tokenKey `cyberaudit.token`, segredos) no `cypress.config.js`.
+- **Bypass de login** (specs que não são de login): `cy.task('forgeToken',{email}).then(t =>
+  cy.visit('/', { onBeforeLoad: w => w.localStorage.setItem(Cypress.env('tokenKey'), t) }))`.
+- **`jsconfig.json`** liga o IntelliSense do Cypress no VS Code (precisa Reload Window).
+
+### Cypress — armadilhas já pagas (não repetir)
+- **Sem `data-testid`** no Frontend → selecionar por placeholder/tipo/texto. Login:
+  `input[type=email]`/`input[type=password]`, submit `cy.get('form').contains('button','Entrar')`
+  (há 2 "Entrar": aba e submit). 2FA: `input[placeholder="000000"]` + botão "Confirmar".
+  Dashboard: `cy.contains('Histórico')` (nav só-logado). Scan: `input[placeholder="example.com"]`
+  + `cy.contains('button','◈ Scan')` (o `◈` distingue da nav "Scanner").
+- **Scan demora ~10-25s** → `{ timeout: 60000 }` na asserção da nota (`/100`).
+- **Agendamentos:** após criar, o grupo vem EXPANDIDO (Pausar/Remover visíveis) — NÃO
+  clicar no domínio (recolhe). Após **reload** vem RECOLHIDO (▸) — aí clicar no domínio
+  pra expandir antes do Remover. "Editar" = toggle **Pausar/Retomar** (backend só tem
+  create/toggle/delete). **Remover dispara `window.confirm`** → Cypress aceita sozinho.
+  `cy.contains('Agendado')` casa com o título "Scans Agendados" (h2) — escopar em `tr`.
+  Use host único por run (`example-${Date.now()}.com`, com CRASES) + remova no fim.
+- **Binário do Cypress** pode "sumir" do cache (`AppData\Local\Cypress\Cache`) por
+  antivírus travando o `Cypress.exe` → `npx cypress install --force` + exclusão no AV.
+- Pra inspecionar a UI manualmente: forjar JWT (openssl, mesmo segredo), setar em
+  `localStorage["cyberaudit.token"]` e recarregar. O token expira em ~2h.
+
+### PENDENTE / próximos
+- **PLAN-01 na tela** (P0): Free não exporta PDF na UI (complementa o PLAN-01 de API).
+- **PAY-11** (P1): Pix na tela (QR, copia-e-cola, polling detecta confirmação — pode
+  precisar simular o webhook pro polling "ver" a confirmação).
+- **PAY-12** (P1): cartão na tela usa **Secure Fields do MP em iframe cross-origin** —
+  Cypress não acessa fácil; provável inviável no Cypress (avaliar mock do SDK ou marcar
+  como coberto manualmente).
+- **UI-02/UI-03/PLAN-01/UI-01** são ⚠️ Parcial (Cypress ✅, **Selenium** pendente — última
+  fase, opcional conforme vagas-alvo).
+- **Fase 6 (CI):** Newman + Maven no GitHub Actions, checkout dos 3 repos, Allure.
+
+### COMMITS PENDENTES (conferir `git status` nos DOIS repos)
+- **Backend** tem mudanças não commitadas: `MercadoPagoService.java` (patch mp.base-url),
+  `application.properties` (mp.base-url), `TestBillingController.java` (gatilho PAY-10).
+  Commitar no repo do Backend.
+- **cyberaudit-qa**: specs de Cypress, testes de pagamento, `seed.sql`, `config.properties`,
+  `TestConfig.java`, stubs do wiremock, `docker-compose.test.yml`, `jsconfig.json`, docs.
+  Ver `git status`; os comandos de commit sugeridos ao longo do chat seguem o padrão
+  `tipo(escopo): descricao` (sem acento, sem atribuição).
+
+---
+
+## 8. Atualização de estado (2026-10-26) — PAY-11 verde, PAY-12 decidido, módulo de pagamento fechado
+
+Atualiza o "PENDENTE / próximos" da §7 (PAY-11 saiu de "a fazer"; PAY-12 decidido). A matriz
+`docs/casos-de-teste.md` continua sendo a fonte da verdade.
+
+### PAY-11 (Pix na tela) ✅ verde e idempotente
+`e2e-cypress/cypress/e2e/ui-11-pix.cy.js` (autoria do dono; Claude revisou/rodou). Fluxo:
+badge FREE → Planos → Assinar "Pessoal Pro" → aba Pix → CPF → Gerar Pix → QR + copia-e-cola
+→ webhook simulado → polling detecta e a tela mostra o plano ativo sem reload.
+
+### Infra nova de Cypress (Claude) — além de totp/forgeToken
+Dois `cy.task` novos no `cypress.config.js` + uma conta dedicada:
+- **`cy.task('resetFree', { accountId })`** — devolve a conta a FREE e apaga as subscriptions,
+  via `docker exec env-postgres-1 psql`. Chamar no `beforeEach` (checkout MUTA pra PRO e
+  persiste → re-run idempotente). accountId validado como UUID (nunca roda sem WHERE).
+- **`cy.task('signMpWebhook', { paymentId })`** — assina o webhook `payment` do MP
+  (manifesto `id:<id>;request-id:<req>;ts:<ts>;` → HMAC-SHA256 com `mpWebhookSecret`) e
+  devolve `{ headers, body }` prontos pro `cy.request`. Mesmo contrato do PAY-06.
+- **Conta `qa-pay-11`** (`qa-pay-11@cyberaudit.test`, FREE) no `env/seed.sql` + chaves no
+  `cypress.config.js` (`emailPay11`/`userIdPay11`/`accountIdPay11`/`mpWebhookSecret`). Isola
+  das contas de pagamento do RestAssured (que resetam no `@BeforeEach` — rodar junto dá corrida).
+
+### Armadilhas já pagas no PAY-11 (valem pra todo caso de pagamento na UI)
+- **`cy.request` do webhook tem que ir pro `Cypress.env('apiUrl')` (8081).** URL relativa cai
+  no `baseUrl` (8090 = frontend nginx → 405), não no backend.
+- **No sucesso, o `onSuccess` fecha só o CheckoutModal; o PlansModal continua aberto cobrindo
+  o header.** O badge "PRO" do header fica **coberto** → `should('be.visible')` nele falha
+  (Cypress não considera visível elemento tapado por overlay). Prova de sucesso: o card Pro
+  vira **"Cancelar assinatura"** (`cy.contains('[class*=planCard]','Pessoal Pro').within(...)`),
+  visível DENTRO do modal aberto. (Ou fechar o modal pelo `[class*=modalClose]` antes.)
+- **O input do CPF some assim que o QR aparece** (a tela troca do form pro QR), ANTES da
+  confirmação — então `input[...].should('not.exist')` NÃO é sinal de sucesso. Sinal real: o
+  "Aguardando confirmação do pagamento..." sumir, ou o "Cancelar assinatura" aparecer.
+- **`cy.get(seletor)` vs `cy.contains(texto)` vs `cy.contains(seletor, texto)`**: `@alias` só
+  resolve em `cy.get('@...')`, nunca como seletor dentro de `cy.contains`.
+
+### PAY-12 (cartão na tela) — E2E inviável no Cypress; coberto por API + manual
+Decisão (dono, 2026-10-26): **opção A**. Os campos de cartão são **iframes cross-origin de
+`secure-fields.mercadopago.com`** (Cypress não digita), e o `createCardToken` vai pro **MP
+real** (build do 8090 com chave de **produção** `APP_USR-…`; WireMock só mocka o backend).
+Lógica coberta por PAY-01/02/14 (API); a casca de UI fica como verificação manual roteirizada
+(ver nota na matriz). Gap pra o manual: o frontend precisa de chave **sandbox** (`TEST-…`)
+pra usar cartões de teste do MP.
+
+### PENDENTE / próximos (substitui o da §7)
+- **PLAN-01 na tela** (P0): Free não exporta PDF na UI — botão "PDF" desabilitado + title
+  "Exportar PDF requer plano PRO ou superior"; controle positivo no PRO (habilitado). Já
+  especificado; é o próximo a escrever.
+- **Selenium** das telas (UI-01/02/03/PLAN-01) — fase opcional conforme vagas-alvo.
+- **Fase 6 (CI):** Newman + Maven + Cypress no GitHub Actions, checkout dos 3 repos, Allure.
