@@ -72,10 +72,27 @@ Opções de correção (a decidir no Backend):
 
 ## Correção
 
-(pendente — fix no Backend)
+Corrigido no Backend em 2026-10-29 (opção `JOIN FETCH`). A query de candidatas
+`findByKeyPrefixAndRevokedAtIsNull` foi trocada por
+`ApiKeyRepository.findActiveByKeyPrefixWithOwner`, que traz o `createdBy` **e a conta
+dele** (`JOIN FETCH k.createdBy u LEFT JOIN FETCH u.account`) na mesma query. O filtro
+recebe um `AppUser` já carregado, igual ao principal do fluxo JWT
+(`findByEmailWithAccount`). A conta precisa vir junto porque os controllers leem
+`user.getAccount()` (ex. `GET /api-keys`); só inicializar o usuário trocaria o
+`LazyInitializationException` do filtro por outro no controller.
+
+Verificado ao vivo no ambiente de teste (container `backend` rebuildado): criar (201)
+→ chave válida em `GET /api-keys` (**200**) → revogar (204) → chave revogada (**401**),
+e nenhuma `LazyInitializationException` no log.
 
 ## Teste de regressão
 
-(pendente — AUTH-05 em RestAssured/Postman: controle positivo "chave válida → 200"
-+ "chave revogada → 401"; só fecha a issue quando o controle positivo passar)
+- Backend: `ApiKeyAuthIntegrationTest` (`@SpringBootTest` + MockMvc, sem
+  `@Transactional` de propósito, pra não mascarar o proxy lazy): chave válida → 200,
+  revogada → 401 depois de ter dado 200, segredo errado com prefixo certo → 401.
+  Vermelho antes do fix (`LazyInitializationException`), verde depois; suíte inteira
+  verde (622 testes).
+- QA (pendente, autoria do dono): AUTH-05 em RestAssured/Postman, com o controle
+  positivo "chave válida → 200" + "chave revogada → 401". A issue fecha quando o
+  AUTH-05 passar.
 ```

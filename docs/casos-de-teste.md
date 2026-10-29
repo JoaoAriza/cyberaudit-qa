@@ -29,7 +29,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | AUTH-02 | Autenticação | Senha errada e usuário inexistente | 401 com a mesma mensagem nos dois casos, sem revelar se o usuário existe | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-03) |
 | AUTH-03 | Autenticação | JWT expirado, assinatura adulterada, `alg: none` | 401 em todos | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) |
 | AUTH-04 | 2FA | Sem código TOTP, código inválido, código reutilizado | Acesso negado nos três | RestAssured, Cypress | P0 | 🐛 Reuso de TOTP não bloqueado (BUG-04, replay do 2º fator) — verificado 2026-10-26; sem-código/inválido → 422 (ok) e controle válido → 200, prontos pra automatizar; reuso fica @Disabled até o fix. Automação adiada (precisa lib TOTP no pom + conta 2FA dedicada) |
-| AUTH-05 | API key | Chamada com API key revogada | 401 | Postman, RestAssured | P1 | 🐛 Bug — API key não autentica (ver `bugs/BUG-01-apikey-auth-lazyinit.md`); automação bloqueada até o fix |
+| AUTH-05 | API key | Chamada com API key revogada | 401 | Postman, RestAssured | P1 | 🔲 A fazer — BUG-01 corrigido no Backend (2026-10-29, `bugs/BUG-01-apikey-auth-lazyinit.md`); desbloqueado: chave válida → 200 (controle) e revogada → 401 |
 | AUTHZ-01 | Controle de acesso | Usuário A consulta scan do usuário B pelo ID | 403 ou 404, nunca os dados | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-08) |
 
 ## Planos e limites
@@ -343,3 +343,11 @@ PDF) e o **Selenium** das telas (fase opcional).
   (criptografia) FAIL — coerente com o alvo HTTP sem HTTPS/cert inválido.
 - **Observação de produto (não é bug):** o PDF exportável — o arquivo que vai pra auditoria —
   **não inclui** o mapeamento de compliance que a UI/API mostram. Candidato a melhoria futura.
+
+## 2026-10-29 — BUG-01 corrigido; AUTH-05 desbloqueado
+
+Fix no Backend: a query de candidatas da API key passou a trazer o dono e a conta dele
+(`JOIN FETCH`), então o `ApiKeyAuthFilter` não toca mais em proxy lazy fora da sessão.
+Regressão no próprio Backend (`ApiKeyAuthIntegrationTest`, vermelho antes / verde depois)
+e confirmação ao vivo no ambiente Docker: chave válida → 200, revogada → 401. AUTH-05 sai
+de 🐛 e vai pra 🔲 — o caso agora tem controle positivo possível. Automação é do dono.

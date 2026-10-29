@@ -435,3 +435,36 @@ Em 2026-10-28 o resto já está no `origin/main` (foi preciso pra a CI rodar ver
 adapters de Allure, specs, pom, `.gitignore`, bugs, matriz, etc. Pendentes só: **`HANDOFF.md`**
 e **`docs/linkedin-plan.md`**. Commit no padrão `tipo(escopo): descricao` (sem acento, sem
 atribuição); o Claude não commita sozinho — manda o comando.
+
+---
+
+## 10. Correção de bugs, uma etapa por vez (2026-10-29)
+
+Ritmo combinado com o dono: **um bug por etapa** → Claude corrige no Backend + escreve a
+regressão na suíte do **Backend** (produto, não portfólio) + verifica ao vivo no ambiente
+Docker + atualiza bug/matriz/HANDOFF → o dono commita → o dono escreve o caso de QA
+destravado (Regra 3) → próxima etapa. Ordem: BUG-01 → BUG-02 → BUG-03 → BUG-04.
+
+### Etapa 1 — BUG-01 ✅ corrigido (API key não autenticava)
+- **Fix:** `ApiKeyRepository.findActiveByKeyPrefixWithOwner` (`JOIN FETCH` do `createdBy` +
+  `account`) no lugar de `findByKeyPrefixAndRevokedAtIsNull`; `ApiKeyService.validate` usa a
+  nova query. Regressão: `ApiKeyAuthIntegrationTest` (3 testes). Suíte do Backend: 622 verdes.
+- **Ambiente:** o container `backend` foi rebuildado com o fix
+  (`docker compose -f env/docker-compose.test.yml up -d --build backend`). O
+  `backend-noallowlist` (8099, SSRF-06) continua com a imagem antiga — não importa pro AUTH-05.
+- **Destrava AUTH-05 (dono escreve).** O que prova: uma chave revogada perde o acesso na
+  hora — se o 401 da revogada viesse sem um 200 da MESMA chave antes, ele não distingue
+  "revogação funciona" de "API key quebrada" (que era exatamente o BUG-01). Contrato
+  confirmado ao vivo (qa-pro, token forjado):
+  - `POST /api-keys` `{"name":"..."}` com Bearer → **201**, corpo traz `id`, `keyPrefix` e
+    `plainKey` (`ca_` + 32 hex; só aparece nesta resposta).
+  - Qualquer rota autenticada com header **`X-Api-Key: <plainKey>`** (sem Bearer) → ex.
+    `GET /api-keys` → **200** (array). Chave revogada ou adulterada → **401**
+    `{"error":"Autenticação necessária."}`.
+  - `DELETE /api-keys/{id}` com Bearer → **204**; revogar de novo → 409 (lido no código).
+  - Armadilhas (lidas no `ApiKeyService`): nome da chave é **único por conta** (repetir → 409, use nome único por run);
+    máximo de **10 chaves ativas** por conta (passou disso → 402, então revogue o que criar);
+    qa-free não cria chave (FREE → 402).
+
+### Próxima etapa — BUG-02 (SSRF hex `0x7f000001`)
+Reativa o teste `@Disabled` do SSRF-03 hex em `SsrfGuardTest` (o dono tira o `@Disabled`).
