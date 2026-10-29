@@ -443,7 +443,8 @@ atribuição); o Claude não commita sozinho — manda o comando.
 Ritmo combinado com o dono: **um bug por etapa** → Claude corrige no Backend + escreve a
 regressão na suíte do **Backend** (produto, não portfólio) + verifica ao vivo no ambiente
 Docker + atualiza bug/matriz/HANDOFF → o dono commita → o dono escreve o caso de QA
-destravado (Regra 3) → próxima etapa. Ordem: BUG-01 → BUG-02 → BUG-03 → BUG-04.
+destravado (Regra 3) → próxima etapa. Ordem: BUG-01 → BUG-02 → BUG-05 → BUG-03 → BUG-04
+(o BUG-05 apareceu na revisão do BUG-02 e entrou na frente por ser o mesmo arquivo).
 
 ### Etapa 1 — BUG-01 ✅ corrigido (API key não autenticava)
 - **Fix:** `ApiKeyRepository.findActiveByKeyPrefixWithOwner` (`JOIN FETCH` do `createdBy` +
@@ -466,5 +467,22 @@ destravado (Regra 3) → próxima etapa. Ordem: BUG-01 → BUG-02 → BUG-03 →
     máximo de **10 chaves ativas** por conta (passou disso → 402, então revogue o que criar);
     qa-free não cria chave (FREE → 402).
 
-### Próxima etapa — BUG-02 (SSRF hex `0x7f000001`)
-Reativa o teste `@Disabled` do SSRF-03 hex em `SsrfGuardTest` (o dono tira o `@Disabled`).
+### Etapa 2 — BUG-02 ✅ corrigido (SSRF: IPv4 em formato alternativo)
+- **Fix:** `SsrfGuard.rejectNonCanonicalIpv4` — host cujo último rótulo é número (regra
+  WHATWG) só passa se for `a.b.c.d` decimal canônico; o resto → 403 com "equivale a X".
+  Recusa em vez de normalizar porque o JDK e o navegador discordam (`0177.0.0.1`: JDK =
+  177.0.0.1 público, navegador = 127.0.0.1). Regressão: 18 casos novos no `SsrfGuardTest`
+  do Backend. Suíte do Backend: 640 verdes. Container `backend` rebuildado.
+- **Destrava o SSRF-03 hex (dono tira o `@Disabled`).** O que prova: o guard não pode ser
+  contornado reescrevendo o endereço interno — se só a forma "bonita" `127.0.0.1` fosse
+  barrada, qualquer reescrita (hex, octal, inteiro) virava porta de entrada pra rede
+  interna. A expectativa do teste já está certa (403 `DOMAIN_BLOCKED`); a mensagem mudou
+  (agora "formato alternativo (equivale a 127.0.0.1)"), mas o teste só confere `error`.
+  Ideia pro dono (opcional): acrescentar `0177.0.0.1` como caso — é o mais forte dos dois.
+- **Achado na revisão → BUG-05 / SSRF-07** (`docs/bugs/BUG-05-ssrf-host-com-porta.md`):
+  `/scan/verify-check` (público) aceita host **com porta** e faz requisição de saída pra
+  destino interno. Ainda não corrigido.
+
+### Próxima etapa — BUG-05 (host com porta escapa do guard)
+Mesmo arquivo (`SsrfGuard.validateHost`) e mesma família do BUG-02. Depois, BUG-03 e BUG-04.
+O SSRF-07 é caso novo pro dono escrever depois do fix (três hosts com porta → 403).

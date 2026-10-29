@@ -4,6 +4,8 @@ Consolida os 26 casos originais do escopo (`CyberAudit QA — Escopo do projeto 
 testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogados em
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
+Contagem atual (2026-10-29, com os casos acrescentados depois, como o SSRF-07): 42 casos
+— 21 P0, 19 P1, 2 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -46,10 +48,11 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 |---|---|---|---|---|---|---|
 | SSRF-01 | Anti-SSRF | Alvo `127.0.0.1`, `localhost`, `::1` | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-11) |
 | SSRF-02 | Anti-SSRF | Alvo `169.254.169.254`, `10.x`, `192.168.x` | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-11) |
-| SSRF-03 | Anti-SSRF | Formas alternativas: `2130706433`, `0x7f000001`, `127.1` | Rejeitado | RestAssured | P0 | 🐛 Bug (forma hex, `bugs/BUG-02-ssrf-hex-nao-normalizado.md`) — decimal/curto ✅ RestAssured (2026-10-11); hex em teste `@Disabled` até o fix |
+| SSRF-03 | Anti-SSRF | Formas alternativas: `2130706433`, `0x7f000001`, `127.1` | Rejeitado | RestAssured | P0 | 🔲 Reativar hex — decimal/curto ✅ RestAssured (2026-10-11); BUG-02 corrigido no Backend (2026-10-29, `bugs/BUG-02-ssrf-hex-nao-normalizado.md`), falta tirar o `@Disabled` do hex |
 | SSRF-04 | Anti-SSRF | Hostname público que resolve para IP privado | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; hostnames via extra_hosts → IP privado, CI-safe) |
 | SSRF-05 | Anti-SSRF | Alvo externo que redireciona para IP interno | Redirecionamento não seguido | RestAssured + WireMock | P1 | ✅ Passou — RestAssured (2026-10-12; redirect 302→interno não seguido, bloqueio no hop) |
 | SSRF-06 | Anti-SSRF | Allowlist de teste fora do profile `test` | Allowlist inexistente | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; backend 8099 sem profile, juice-shop/wiremock → 403) |
+| SSRF-07 | Anti-SSRF | Host com porta no `/scan/verify-check` (público): `127.0.0.1:8081`, `localhost:8081`, `169.254.169.254:80` | Rejeitado (403), igual ao host sem porta | RestAssured | P1 | 🐛 Bug — `bugs/BUG-05-ssrf-host-com-porta.md` (2026-10-29); os três dão 200 e o backend faz a requisição de saída |
 
 ## Domínio e motor de scan
 
@@ -351,3 +354,16 @@ Fix no Backend: a query de candidatas da API key passou a trazer o dono e a cont
 Regressão no próprio Backend (`ApiKeyAuthIntegrationTest`, vermelho antes / verde depois)
 e confirmação ao vivo no ambiente Docker: chave válida → 200, revogada → 401. AUTH-05 sai
 de 🐛 e vai pra 🔲 — o caso agora tem controle positivo possível. Automação é do dono.
+
+## 2026-10-29 — BUG-02 corrigido; SSRF-07 novo (BUG-05)
+
+- **BUG-02 corrigido no Backend.** O guard passou a recusar IPv4 fora da forma canônica
+  `a.b.c.d` (hex, octal, inteiro, curta) antes de resolver. Na revisão apareceu uma
+  divergência pior que o hex: o JDK lê `0177.0.0.1` como 177.0.0.1 (público, passava),
+  navegador/curl leem 127.0.0.1. Ao vivo: as cinco formas → 403. SSRF-03 fica 🔲 só até o
+  dono tirar o `@Disabled` do hex; o resto do bloco SSRF continua verde (rodado sem
+  alteração: 15 verdes, 1 pulado).
+- **SSRF-07 novo (P1), BUG-05.** `GET /scan/verify-check` (público) com host **com porta**
+  (`127.0.0.1:8081`, `localhost:8081`, `169.254.169.254:80`) → 200 e o backend faz a
+  requisição de saída; sem a porta → 403. SSRF cego (só `verified:true/false` volta),
+  `bugs/BUG-05-ssrf-host-com-porta.md`. Próxima etapa de fix.

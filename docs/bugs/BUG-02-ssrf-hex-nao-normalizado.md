@@ -67,10 +67,31 @@ hosts com formato numérico não-decimal-pontuado.
 
 ## Correção
 
-(pendente — fix no Backend)
+Corrigido no Backend em 2026-10-29: `SsrfGuard.validateHost` passou a **recusar IPv4
+fora da forma canônica** `a.b.c.d` decimal, antes de resolver. Um host cujo último
+rótulo é numérico (regra "ends in a number" da especificação de URL do WHATWG, a que
+navegadores e curl seguem) só passa se for exatamente quatro octetos decimais, sem
+zero à esquerda. Qualquer outra forma (hex, octal, inteiro, curta, cinco partes,
+estouro de 32 bits) → 403 `DOMAIN_BLOCKED`, com a mensagem dizendo a que endereço ela
+equivale (`'0x7f000001' ... (equivale a 127.0.0.1)`).
+
+Por que recusar em vez de normalizar: na revisão apareceu uma segunda divergência, mais
+séria que o hex. O JDK lê `0177.0.0.1` como **177.0.0.1** (público, passava no guard),
+enquanto navegador e curl leem **127.0.0.1** (octal). Validar com um parser e conectar
+com outro é a receita clássica de SSRF. Recusar a forma ambígua elimina a divergência
+inteira, inclusive para destino público (`134744072` = 8.8.8.8 também dá 403 agora;
+nenhum alvo legítimo é escrito assim).
+
+Verificado ao vivo (container `backend` rebuildado): `2130706433`, `127.1`,
+`0x7f000001`, `0177.0.0.1`, `0x7f.0.0.1` → todos **403**.
 
 ## Teste de regressão
 
-(pendente — SSRF-03 em RestAssured: hoje documenta decimal/curto → 403; quando o fix
-entrar, `0x7f000001` passa a esperar 403 e fecha a issue)
+- Backend: `SsrfGuardTest` ganhou 18 casos (hex inteiro/por octeto/maiúsculo/com zeros
+  à esquerda, octal inteiro/por octeto, inteiro decimal, curta, cinco partes, estouro;
+  mensagem com o equivalente; e os controles: `8.8.8.8` e hostnames com rótulo numérico
+  no meio continuam aceitos). 11 falhavam antes do fix; suíte inteira verde (640).
+- QA: `SsrfGuardTest` do RestAssured rodado sem alteração → 15 verdes, 1 pulado (o hex
+  `@Disabled`). **Pendente (dono):** tirar o `@Disabled` do hex; a issue fecha quando
+  ele passar.
 ```
