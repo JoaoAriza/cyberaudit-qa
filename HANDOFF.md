@@ -377,3 +377,61 @@ pra usar cartões de teste do MP.
   especificado; é o próximo a escrever.
 - **Selenium** das telas (UI-01/02/03/PLAN-01) — fase opcional conforme vagas-alvo.
 - **Fase 6 (CI):** Newman + Maven + Cypress no GitHub Actions, checkout dos 3 repos, Allure.
+
+---
+
+## 9. Atualização (2026-10-28) — Fase 6 FECHADA; próximo chat é correção de bugs
+
+Esta seção põe o handoff em dia (as §7/§8 ficaram desatualizadas). Matriz = fonte da verdade.
+
+### O que fechou desde a §8
+- **PLAN-01 na tela ✅** (`e2e-cypress/.../plan-01-pdf.cy.js`) e **REP-01/REP-02 ✅**
+  (`api-restassured/.../RelatorioPdfTest.java`; PDFBox 2.0.31 no pom; REP-02 é na API —
+  `GET /scan` → `compliance.lgpdItems`/`isoItems`, NÃO no PDF).
+- **Fase 6 (CI + Allure) CONCLUÍDA.** `.github/workflows/ci.yml`: 1 job sobe o
+  docker-compose (os 3 repos lado a lado), roda RestAssured + Newman + Cypress, gera o
+  relatório Allure unificado e publica no **GitHub Pages** — ao vivo em
+  `https://joaoariza.github.io/cyberaudit-qa/`, **59 testes, 100% verde**. Allure: adapter
+  no pom (`allure-junit5`), `newman-reporter-allure`, `@shelex/cypress-allure-plugin`.
+  Armadilha já paga da CI: o app segue `navigator.language`; o runner é en-US → renderizava
+  em inglês e os seletores PT quebravam. Fix: `cypress/support/e2e.js` fixa
+  `localStorage['cyberaudit.lang']='pt-BR'` num `window:before:load`.
+- **LinkedIn:** série de 6 posts pronta em `docs/linkedin-plan.md` (texto + notas de imagem).
+
+### PRÓXIMO CHAT — corrigir os bugs no Backend (e automatizar a regressão)
+Os 4 bugs estão documentados em `docs/bugs/`. O trabalho de fix é no **repo do Backend**
+(`cyberaudit-backend`). **Regra combinada com o dono: para CADA bug corrigido, escrever (ou
+reativar) o caso de teste de regressão em cima** — os testes `@Disabled` viram verdes e os
+casos saem de 🐛 na matriz. Mapa bug → caso a destravar:
+- **BUG-01** (API key não autentica, `LazyInitializationException` em `ApiKeyAuthFilter`) →
+  desbloqueia **AUTH-05** (chave revogada → 401; precisa do controle: chave válida → 200).
+- **BUG-02** (SSRF: IPv4 hex `0x7f000001` não normalizado) → reativa o teste **SSRF-03 hex**
+  que está `@Disabled` em `SsrfGuardTest`.
+- **BUG-03** (scan não conecta em HTTP puro em porta não-padrão, `httpStatus:0`) →
+  desbloqueia **SCAN-01**, reativa **SCAN-03** (`@Disabled`, espera XSS+SQLi no Juice Shop) e
+  libera **SCAN-02/04** e **SCORE-01**.
+- **BUG-04** (replay de TOTP — mesmo código 2FA reusável; `verifyLoginCode` ramo TOTP não
+  consome o código, diferente do Email OTP que marca `used`) → escrever **AUTH-04** (sub-casos
+  sem-código/inválido → 422 e controle válido → 200 já desenhados; o reuso fica `@Disabled`
+  guardando "2º uso → negado" até o fix). **Precisa adicionar lib de TOTP no pom** do
+  RestAssured (ex. `dev.samstevens.totp:totp`) + conta 2FA dedicada no seed (throttle de
+  2FA: 5 falhas/15 min por usuário).
+
+### Caso novo pedido pelo dono — verificação de posse de domínio (fluxo feliz)
+O dono comprou **PRO na conta pessoal dele** no CyberAudit e quer testar o **módulo de
+vincular o próprio domínio**: subir o arquivo que o sistema pede (`/.well-known/cyberaudit.txt`
+com o token) pra provar a posse, e verificar se o módulo **libera** o domínio (→ scan ativo /
+PDF nesse domínio). Hoje a matriz só tem o **negativo** (DOM-01: domínio não verificado →
+recusado); isto é o **positivo** — candidato a **caso novo (ex. DOM-02)**. Observações:
+- É verificação da **própria** conta/domínio do dono (uso legítimo do produto, não é scan
+  ativo de terceiro) — pode ser feito **manualmente** na conta PRO real pra validar o módulo.
+- Pro portfólio automatizado, reproduzir o **fluxo local** (o mecanismo de posse já existe:
+  `PlanLimitService` + a checagem ao vivo de `/.well-known/cyberaudit.txt`; o
+  `PLATFORM_STAFF_EMAILS` hoje pula essa checagem no ambiente de teste — ver §5). Planejar
+  como manual (conta real) + automatizado (ambiente local).
+
+### Commits pendentes neste repo (conferir `git status`)
+Em 2026-10-28 o resto já está no `origin/main` (foi preciso pra a CI rodar verde): CI,
+adapters de Allure, specs, pom, `.gitignore`, bugs, matriz, etc. Pendentes só: **`HANDOFF.md`**
+e **`docs/linkedin-plan.md`**. Commit no padrão `tipo(escopo): descricao` (sem acento, sem
+atribuição); o Claude não commita sozinho — manda o comando.
