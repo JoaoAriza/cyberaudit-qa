@@ -1,4 +1,4 @@
-# BUG-05 — Host com porta escapa do guard anti-SSRF no `/scan/verify-check`
+# BUG-05 — Host com porta (ou delimitador de URL) escapa do guard anti-SSRF no `/scan/verify-check`
 
 Encontrado em 2026-10-29 pelo Claude ao revisar o `SsrfGuard` durante o fix do BUG-02.
 Confirmado ao vivo contra o ambiente de teste. Formato conforme `../template-bug.md`.
@@ -70,12 +70,44 @@ Correção possível (a decidir no Backend): separar a porta no `validateHost` a
 checagens (cuidando de `[::1]:443`), e/ou validar com `SsrfGuard.validate(url)` a URL
 que o `DomainProtectionService` realmente vai requisitar.
 
+## Variantes encontradas no fix (mesma causa)
+
+A porta era só uma das formas. Qualquer coisa que o `InetAddress` não resolve, mas que o
+`URI` (depois do `trim()` do `DomainProtectionService`) reduz a um host interno, passava:
+
+| host enviado | guard (antes) | `URI` conectava em |
+|---|---|---|
+| `127.0.0.1:8081` | passa | 127.0.0.1:8081 |
+| `127.0.0.1 ` (espaço) | passa | 127.0.0.1 |
+| `127.0.0.1/`, `127.0.0.1#`, `127.0.0.1?` | passa | 127.0.0.1 |
+| `[::1]:443` | passa | ::1 |
+| `x@<hostname que resolve para IP privado>` | passa | o IP privado |
+
+(`x@127.0.0.1` já dava 403 por acaso: o fix do BUG-02 recusa esse texto como IP inválido.)
+
 ## Correção
 
-(pendente — fix no Backend)
+Corrigido no Backend em 2026-10-29, em duas camadas:
+
+1. **`SsrfGuard.validateHost`** apara espaço nas pontas, recusa delimitadores de URL
+   (`@ / ? # \`, espaço e caracteres de controle no meio) e **separa a porta**
+   (`host:porta`, `[ipv6]:porta`; porta não numérica → 403) antes das checagens. A
+   porta em host público continua aceita: domínio verificado pode ter porta
+   (`juice-shop:3000`, que agora passa pela allowlist de teste em vez de pelo buraco).
+2. **`DomainProtectionService.isOwnershipVerified`** valida a **URL montada** com
+   `SsrfGuard.validate(url)` — a que o cliente realmente requisita — em vez do
+   parâmetro cru. Validar o que se conecta fecha a classe, não só as variantes conhecidas.
+
+Verificado ao vivo (container `backend` rebuildado): as 9 variantes da tabela/passos →
+**403**; controles `example.com:443` e `juice-shop:3000` → 200 (não bloqueados).
 
 ## Teste de regressão
 
-(pendente — SSRF-07 em RestAssured: os três hosts com porta → 403, com os controles
-sem porta → 403 e um host público com porta → não-403)
+- Backend: `DomainProtectionServiceTest` ganhou um teste que sobe um `ServerSocket` em
+  127.0.0.1 fazendo papel de serviço interno e prova que **nenhuma conexão chega** a ele
+  (5 variantes; antes do fix as 5 conectavam). `SsrfGuardTest` ganhou 19 casos (15
+  recusas, 3 aceites de host público com porta, allowlist casando sem a porta). Suíte
+  inteira verde (664).
+- QA: suíte RestAssured inteira rodada sem alteração → 44 rodados, 0 falhas, 2 pulados
+  (os `@Disabled` do SSRF-03 hex e do SCAN-03). **Pendente (dono):** SSRF-07.
 ```

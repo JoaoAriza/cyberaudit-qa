@@ -52,7 +52,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SSRF-04 | Anti-SSRF | Hostname público que resolve para IP privado | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; hostnames via extra_hosts → IP privado, CI-safe) |
 | SSRF-05 | Anti-SSRF | Alvo externo que redireciona para IP interno | Redirecionamento não seguido | RestAssured + WireMock | P1 | ✅ Passou — RestAssured (2026-10-12; redirect 302→interno não seguido, bloqueio no hop) |
 | SSRF-06 | Anti-SSRF | Allowlist de teste fora do profile `test` | Allowlist inexistente | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; backend 8099 sem profile, juice-shop/wiremock → 403) |
-| SSRF-07 | Anti-SSRF | Host com porta no `/scan/verify-check` (público): `127.0.0.1:8081`, `localhost:8081`, `169.254.169.254:80` | Rejeitado (403), igual ao host sem porta | RestAssured | P1 | 🐛 Bug — `bugs/BUG-05-ssrf-host-com-porta.md` (2026-10-29); os três dão 200 e o backend faz a requisição de saída |
+| SSRF-07 | Anti-SSRF | Host disfarçado no `/scan/verify-check` (público): com porta (`127.0.0.1:8081`, `localhost:8081`, `169.254.169.254:80`, `[::1]:443`) e com delimitador (`127.0.0.1/`, `127.0.0.1#`, espaço no fim) | Rejeitado (403), igual ao host sem porta | RestAssured | P1 | 🔲 A fazer — BUG-05 corrigido no Backend (2026-10-29, `bugs/BUG-05-ssrf-host-com-porta.md`); desbloqueado: com porta → 403, controle público com porta → 200 |
 
 ## Domínio e motor de scan
 
@@ -367,3 +367,12 @@ de 🐛 e vai pra 🔲 — o caso agora tem controle positivo possível. Automa�
   (`127.0.0.1:8081`, `localhost:8081`, `169.254.169.254:80`) → 200 e o backend faz a
   requisição de saída; sem a porta → 403. SSRF cego (só `verified:true/false` volta),
   `bugs/BUG-05-ssrf-host-com-porta.md`. Próxima etapa de fix.
+
+## 2026-10-29 — BUG-05 corrigido; SSRF-07 desbloqueado
+
+Fix no Backend em duas camadas: o `validateHost` separa a porta e recusa delimitadores de
+URL (`@ / ? #`, espaço), e o `verify-check` passa a validar a URL que realmente requisita.
+Durante o fix apareceram mais variantes da mesma causa além da porta (espaço no fim, `/`,
+`#`, `?`, `[::1]:443`, `x@<hostname interno>`) — todas cobertas; detalhe na tabela do
+`bugs/BUG-05-ssrf-host-com-porta.md`. Ao vivo: 9 variantes → 403; `example.com:443` e
+`juice-shop:3000` → 200. SSRF-07 sai de 🐛 e vai pra 🔲 (automação do dono).

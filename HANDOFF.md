@@ -483,6 +483,26 @@ destravado (Regra 3) → próxima etapa. Ordem: BUG-01 → BUG-02 → BUG-05 →
   `/scan/verify-check` (público) aceita host **com porta** e faz requisição de saída pra
   destino interno. Ainda não corrigido.
 
-### Próxima etapa — BUG-05 (host com porta escapa do guard)
-Mesmo arquivo (`SsrfGuard.validateHost`) e mesma família do BUG-02. Depois, BUG-03 e BUG-04.
-O SSRF-07 é caso novo pro dono escrever depois do fix (três hosts com porta → 403).
+### Etapa 3 — BUG-05 ✅ corrigido (host disfarçado escapa do guard no verify-check)
+- **Fix (2 camadas):** `SsrfGuard.stripPort` (chamado no início do `validateHost`) apara
+  as pontas, recusa `@ / ? # \`/espaço/controle e separa a porta antes das checagens;
+  `DomainProtectionService.isOwnershipVerified` valida a **URL montada** com
+  `SsrfGuard.validate(url)`. Regressão no Backend: 24 casos (incl. um `ServerSocket`
+  provando que nenhuma conexão chega ao "serviço interno"). Suíte do Backend: 664 verdes.
+  Container `backend` rebuildado. Suíte RestAssured do dono: 44, 0 falhas, 2 pulados.
+- **Destrava SSRF-07 (dono escreve).** O que prova: o guard valida o MESMO host que o
+  servidor vai conectar. Se o guard lê `127.0.0.1:8081` como "não resolve, deixa passar"
+  e o cliente HTTP lê como "127.0.0.1 na porta 8081", qualquer visitante (o endpoint é
+  público) faz o servidor bater na rede interna. Contrato confirmado ao vivo:
+  - `GET /scan/verify-check?host=<h>` (sem token funciona; com token de qa-pro foge do
+    rate-limit de visitante, que dá 429 depois de poucas chamadas).
+  - `127.0.0.1:8081`, `localhost:8081`, `169.254.169.254:80`, `[::1]:443`, `127.0.0.1/`,
+    `127.0.0.1#`, `127.0.0.1 ` → **403** `{"error":"DOMAIN_BLOCKED"}`.
+  - Controle: `example.com:443` → **200** `{"verified":false,...}` (porta em host público
+    vale). Atenção: `example.com` depende de DNS externo (mesma ressalva do `nip.io` do
+    SSRF-04 na CI); `juice-shop:3000` → 200 é a alternativa local.
+  - Armadilha: o host vai em query string → caracteres como `#`, espaço e `[ ]` precisam
+    de URL-encoding (`queryParam` do RestAssured já codifica; na mão, `%23`, `%20`).
+
+### Próxima etapa — BUG-03 (scan não conecta em HTTP puro em porta não-padrão)
+Destrava SCAN-01, reativa SCAN-03 (`@Disabled`) e libera SCAN-02/04 e SCORE-01. Depois, BUG-04.
