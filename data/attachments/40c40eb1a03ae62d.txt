@@ -1,0 +1,1 @@
+{"host":"juice-shop:3000","error":"ACCOUNT_DOMAIN_NOT_VERIFIED","message":"Scan ativo só é permitido em domínios verificados na sua conta. Cadastre e verifique \"juice-shop:3000\" para continuar.","timestamp":"2026-10-29T13:13:51.758545005"}
