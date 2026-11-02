@@ -446,6 +446,10 @@ Docker + atualiza bug/matriz/HANDOFF → o dono commita → o dono escreve o cas
 destravado (Regra 3) → próxima etapa. Ordem: BUG-01 → BUG-02 → BUG-05 → BUG-03 → BUG-04
 (o BUG-05 apareceu na revisão do BUG-02 e entrou na frente por ser o mesmo arquivo).
 
+**Ajuste do dono (2026-10-29, depois da Etapa 3):** os casos de QA destravados ficam para
+**depois da rodada de bugs** — o dono escreve todos de uma vez. Cada etapa agora termina
+nos comandos de commit; a fila do dono vai acumulando no fim desta seção.
+
 ### Etapa 1 — BUG-01 ✅ corrigido (API key não autenticava)
 - **Fix:** `ApiKeyRepository.findActiveByKeyPrefixWithOwner` (`JOIN FETCH` do `createdBy` +
   `account`) no lugar de `findByKeyPrefixAndRevokedAtIsNull`; `ApiKeyService.validate` usa a
@@ -494,8 +498,9 @@ destravado (Regra 3) → próxima etapa. Ordem: BUG-01 → BUG-02 → BUG-05 →
   servidor vai conectar. Se o guard lê `127.0.0.1:8081` como "não resolve, deixa passar"
   e o cliente HTTP lê como "127.0.0.1 na porta 8081", qualquer visitante (o endpoint é
   público) faz o servidor bater na rede interna. Contrato confirmado ao vivo:
-  - `GET /scan/verify-check?host=<h>` (sem token funciona; com token de qa-pro foge do
-    rate-limit de visitante, que dá 429 depois de poucas chamadas).
+  - `GET /scan/verify-check?host=<h>` — parâmetro `host`, não `url`. Sem token funciona,
+    mas visitante tem 5 req/min por IP (a 6ª variante já dá 429); qa-pro é `OWNER` no
+    seed e `OWNER` não tem limite por minuto → use o token dele.
   - `127.0.0.1:8081`, `localhost:8081`, `169.254.169.254:80`, `[::1]:443`, `127.0.0.1/`,
     `127.0.0.1#`, `127.0.0.1 ` → **403** `{"error":"DOMAIN_BLOCKED"}`.
   - Controle: `example.com:443` → **200** `{"verified":false,...}` (porta em host público
@@ -503,6 +508,48 @@ destravado (Regra 3) → próxima etapa. Ordem: BUG-01 → BUG-02 → BUG-05 →
     SSRF-04 na CI); `juice-shop:3000` → 200 é a alternativa local.
   - Armadilha: o host vai em query string → caracteres como `#`, espaço e `[ ]` precisam
     de URL-encoding (`queryParam` do RestAssured já codifica; na mão, `%23`, `%20`).
+    Montando a URL na mão, `?host=127.0.0.1#` manda só `127.0.0.1` (o `#` vira
+    fragmento) — que já era 403, e o teste fica verde sem testar o bug.
+  - Ver o vermelho: o `backend-noallowlist` (8099) ainda roda a imagem de antes do fix
+    (conferido em 2026-10-29: com porta e com `#` → 200). Apontar o SSRF-07 uma vez para
+    `base.uri.noAllowlist` mostra os 403 falhando; depois rebuildar a 8099
+    (`docker compose -f env/docker-compose.test.yml up -d --build backend-noallowlist`).
 
-### Próxima etapa — BUG-03 (scan não conecta em HTTP puro em porta não-padrão)
-Destrava SCAN-01, reativa SCAN-03 (`@Disabled`) e libera SCAN-02/04 e SCORE-01. Depois, BUG-04.
+### Etapa 4 — BUG-03 ✅ corrigido (scan não conectava em alvo `http://`)
+- **Causa (não era TLS):** o `HttpClient` do JDK sai em HTTP/2; num alvo `http://` isso
+  vira pedido de upgrade h2c, e o Juice Shop (Node/socket.io) fecha a conexão sem
+  responder → "header parser received no bytes", `httpStatus 0`.
+- **Fix:** `ScannerHttp.newClientBuilder()` (já em HTTP/1.1) nos 22 clientes de 21 módulos
+  que falam com o alvo; as 4 APIs externas fixas ficaram como estavam. Regressão:
+  `ScannerHttpVersionTest` (servidor local que derruba upgrade + varredura dos beans).
+  Suíte do Backend: 666 verdes. Container `backend` rebuildado.
+- **Ao vivo (qa-enterprise):** passivo e ativo no Juice Shop e passivo no WireMock →
+  `httpStatus` real (200 / 403 do Jetty na raiz), nenhum módulo em `ERROR`.
+- **Destrava SCAN-01** (e a conexão que SCAN-02/04 e SCORE-01 precisavam no WireMock).
+  O que prova: o motor completa a troca HTTP com um alvo `http://` em porta não-padrão —
+  sem isso, todo módulo "roda" sem resposta e o relatório parece normal. Contrato:
+  - `GET /scan?url=http://juice-shop:3000/&active=false` com token (qa-pro ou
+    qa-enterprise) → 200; no corpo, `httpStatus` 200 e todo valor de `moduleStatus`
+    (hoje 15 módulos) = `OK`. Leva ~6 s. Conferido ao vivo com os dois tokens.
+  - `openPorts: []` é esperado: o port scan procura portas de risco conhecidas (21, 22,
+    3306, 6379...) e a 3000 não está na lista. Não asserte porta aberta.
+  - O resultado fica em cache (Caffeine, memória) por URL + modo: rodar de novo devolve o
+    mesmo resultado; rebuild do container zera.
+- **SCAN-03 continua bloqueado**, por dois motivos que não são o BUG-03:
+  - SQLi → **BUG-06** (novo, P1): o probe anexa `'` (`apple'`), o Juice Shop vaza
+    `SQLITE_ERROR` e o probe não reconhece (não tem padrão de SQLite do Node).
+  - XSS → **expectativa do caso**, não bug: `/rest/products/search` não ecoa o `q` na
+    resposta (o XSS de busca do Juice Shop é DOM, no navegador), então `false` ali está
+    certo. A parte de XSS precisa de outro alvo — ex. um stub do WireMock que ecoe o
+    parâmetro sem escapar (infra, posso montar quando chegar a hora).
+
+### Próximas etapas
+BUG-06 (destrava o SQLi do SCAN-03) e BUG-04 (replay do TOTP; AUTH-04) — ordem a combinar
+com o dono.
+
+### Fila do dono — depois da rodada de bugs
+- **AUTH-05** (BUG-01) — contrato na Etapa 1.
+- **SSRF-03 hex** (BUG-02) — tirar o `@Disabled`; opcional `0177.0.0.1`. Etapa 2.
+- **SSRF-07** (BUG-05) — contrato e armadilhas na Etapa 3.
+- **SCAN-01** (BUG-03) — contrato na Etapa 4.
+- **SCAN-03** — só depois do BUG-06 e da troca do alvo de XSS.

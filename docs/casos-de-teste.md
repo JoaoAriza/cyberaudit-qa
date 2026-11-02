@@ -59,9 +59,9 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
 | DOM-01 | Domínio | Varredura ativa em domínio não verificado | Recusada | Postman, RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) e Postman (2026-10-06) |
-| SCAN-01 | Motor | Varredura passiva no alvo controlado | Módulos esperados com status OK | RestAssured | P0 | 🐛 Bug reproduzido — `bugs/BUG-03-scan-http-porta-nao-padrao.md` (scan não conecta em HTTP porta não-padrão) |
+| SCAN-01 | Motor | Varredura passiva no alvo controlado | Módulos esperados com status OK | RestAssured | P0 | 🔲 A fazer — BUG-03 corrigido no Backend (2026-10-29, `bugs/BUG-03-scan-http-porta-nao-padrao.md`); desbloqueado: passivo em `http://juice-shop:3000/` → `httpStatus` 200, nenhum módulo em `ERROR` |
 | SCAN-02 | Motor | Alvo com atraso forçado no WireMock | Módulo marcado como timeout, relatório indica resultado parcial | RestAssured + WireMock | P1 | 🔲 A fazer |
-| SCAN-03 | Motor | Varredura ativa no Juice Shop | XSS e SQL injection detectados | RestAssured | P0 | 🐛 Bloqueado por SCAN-01/BUG-03 — probes rodam mas nada detectado (httpStatus:0); teste `@Disabled` até o fix |
+| SCAN-03 | Motor | Varredura ativa no Juice Shop | XSS e SQL injection detectados | RestAssured | P0 | 🐛 Bloqueado — conexão corrigida (BUG-03), mas SQLi não detectado por `bugs/BUG-06-probe-sql-nao-reconhece-sqlite.md`; e o alvo de XSS precisa ser revisto (`/rest/products/search` não ecoa o `q` no servidor). Teste `@Disabled` |
 | SCAN-04 | Motor | Alvo limpo com headers corretos | Nenhum falso positivo nesses módulos | RestAssured + WireMock | P1 | 🔲 A fazer |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
@@ -376,3 +376,17 @@ Durante o fix apareceram mais variantes da mesma causa além da porta (espaço n
 `#`, `?`, `[::1]:443`, `x@<hostname interno>`) — todas cobertas; detalhe na tabela do
 `bugs/BUG-05-ssrf-host-com-porta.md`. Ao vivo: 9 variantes → 403; `example.com:443` e
 `juice-shop:3000` → 200. SSRF-07 sai de 🐛 e vai pra 🔲 (automação do dono).
+
+## 2026-10-29 — BUG-03 corrigido; SCAN-01 desbloqueado; BUG-06 novo
+
+A hipótese de TLS estava errada: o `HttpClient` do JDK sai em HTTP/2, e num alvo `http://` isso
+vira um pedido de upgrade h2c que o Juice Shop (Node/socket.io) derruba sem responder. Fix no
+Backend: os 22 clientes que falam com o alvo passam a usar HTTP/1.1 (`ScannerHttp.newClientBuilder()`).
+Ao vivo: passivo e ativo no Juice Shop → `httpStatus` 200, nenhum módulo em `ERROR`; WireMock idem.
+SCAN-01 sai de 🐛 e vai pra 🔲. SCAN-03 continua bloqueado por outros dois motivos:
+
+- **BUG-06 novo (P1).** O probe de erro de SQL não reconhece `SQLITE_ERROR` (SQLite do Node):
+  o Juice Shop vaza o erro e o scan diz que não. `bugs/BUG-06-probe-sql-nao-reconhece-sqlite.md`.
+- **Expectativa de XSS do SCAN-03 a rever.** `/rest/products/search` não ecoa o `q` na resposta;
+  o XSS de busca do Juice Shop é DOM (no navegador). Um probe do lado do servidor dar `false`
+  ali está certo — o caso precisa de outro alvo para a parte de XSS.

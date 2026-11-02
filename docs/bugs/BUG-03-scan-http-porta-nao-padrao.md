@@ -66,13 +66,67 @@ A linha exata (montagem do request/esquema em `ScannerHttp`/motor de fetch) prec
 ser confirmada no Backend. Também vale mockar o `CrtShService` neste ambiente (hoje
 consulta crt.sh/certspotter de verdade e soma ~2 min por hostname inexistente).
 
+## Causa raiz (confirmada no fix, 2026-10-29)
+
+A hipótese de TLS estava errada. O motor manda `http://` certo para o fetch; o problema
+é a **versão do HTTP**. O `HttpClient` do JDK sai em HTTP/2 por padrão, e num alvo
+`http://` isso vira um pedido de upgrade h2c na primeira requisição
+(`Connection: Upgrade, HTTP2-Settings` + `Upgrade: h2c`). O Juice Shop (Node com
+socket.io, cujo engine.io derruba upgrade que não é dele) **fecha a conexão sem mandar
+nenhum byte** — daí o "header parser received no bytes". Reproduzido fora do Spring com o
+mesmo cliente: padrão → erro; `.version(HTTP_1_1)` → 200.
+
+O "Unsupported or unrecognized SSL message" é outra coisa, e é esperado: o módulo de TLS
+testa `https://juice-shop:3000` de propósito para saber se o alvo tem HTTPS. O WireMock
+(Jetty) aceita o upgrade h2c — reproduzindo agora ele respondia 200 em HTTP/2, então o
+"mesmo sintoma" relatado ali não se repetiu; depois do fix, o scan nele roda sem módulo
+em `ERROR`.
+
 ## Correção
 
-(pendente — fix no Backend)
+Corrigido no Backend em 2026-10-29. `ScannerHttp.newClientBuilder()` devolve um builder
+já em HTTP/1.1, e os **22 clientes de 21 módulos** que falam com o alvo passaram a
+partir dele (antes, `HttpClient.newBuilder()` em cada um). As 4 APIs externas fixas
+(NVD, CT, Mercado Pago, Resend) ficaram como estavam: são HTTPS, o h2 vem por ALPN, sem
+upgrade. Motivo de HTTP/1.1 também em `https://` do alvo: o RFC 9113 depreciou o upgrade
+h2c, os probes modelam HTTP/1.1 (Host, CRLF, métodos) e um protocolo só deixa o
+resultado igual nos dois esquemas.
+
+Verificado ao vivo (container `backend` rebuildado), como qa-enterprise:
+
+| scan | antes | depois |
+|---|---|---|
+| passivo `http://juice-shop:3000/` | `httpStatus 0` | `httpStatus 200`, nenhum módulo em `ERROR` |
+| ativo `http://juice-shop:3000/rest/products/search?q=apple` | `httpStatus 0` | `httpStatus 200`, `inputSurfaceDetected`/`xssProbePerformed` true, nenhum módulo em `ERROR` |
+| passivo `http://wiremock:8080/` | — | `httpStatus 403` (resposta real do Jetty na raiz), nenhum módulo em `ERROR` |
+
+`openPorts: []` no Juice Shop é esperado: o port scan procura portas de risco conhecidas
+(21, 22, 3306, 6379...) e a 3000 não está na lista.
+
+## O que o fix NÃO resolve — SCAN-03 continua bloqueado
+
+Com a conexão de pé, o ativo no `/rest/products/search?q=apple` ainda dá
+`reflectedXssSuspected:false` e `dbErrorLeakageSuspected:false`. São duas coisas
+diferentes, nenhuma delas é o BUG-03:
+
+- **SQLi → bug novo, BUG-06.** O probe anexa `'` ao valor (`apple'`) e o Juice Shop
+  responde 500 com `SQLITE_ERROR: near "'%'": syntax error` na página. O probe não
+  reconhece: a lista de padrões não tem SQLite do Node (só `sqlite3.operationalerror`,
+  do Python). Ver `BUG-06-probe-sql-nao-reconhece-sqlite.md`.
+- **XSS → expectativa do caso, não bug.** Esse endpoint não ecoa o `q` na resposta (só
+  devolve a lista de produtos, vazia para o probe); o XSS de busca do Juice Shop é DOM,
+  acontece no navegador. Um probe do lado do servidor dar `false` ali está correto. O
+  XSS refletido conhecido do Juice Shop (`/rest/track-order/<id>`) é por caminho, e o
+  probe muta o 1º parâmetro de query. O SCAN-03 precisa de outro alvo para a parte de
+  XSS (ex.: um stub do WireMock que ecoa o parâmetro sem escapar).
 
 ## Teste de regressão
 
-(pendente — SCAN-03 em RestAssured: hoje `@Disabled` esperando
-`reflectedXssSuspected:true` + `dbErrorLeakageSuspected:true`; reativa quando o motor
-conectar no alvo HTTP:3000. Fecha a issue quando o SCAN-03 passar.)
+- Backend: `ScannerHttpVersionTest` (novo). Um servidor local que faz o mesmo que o
+  Juice Shop (fecha a conexão sem responder a pedido de upgrade) e o fetch principal
+  contra ele → antes do fix, o mesmo "header parser received no bytes"; depois, 200. E
+  uma varredura dos beans: todo `HttpClient` de módulo que fala com o alvo tem que ser
+  HTTP/1.1 — antes do fix listava os 22. Suíte inteira verde (666).
+- QA: destrava o SCAN-01 (passivo, módulos OK). SCAN-03 segue `@Disabled` até o BUG-06 e
+  a revisão do alvo de XSS. **Pendente (dono, depois da rodada de bugs):** SCAN-01.
 ```
