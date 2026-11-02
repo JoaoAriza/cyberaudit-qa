@@ -65,10 +65,35 @@ Detalhe que importa para o fix: `'` sozinho NÃO quebra essa consulta — o SQLi
 
 ## Correção
 
-(pendente — fix no Backend)
+Corrigido no Backend em 2026-11-01. A lista de padrões ganhou o SQLite como cada driver
+o imprime — o banco é o mesmo, o nome do erro muda:
+
+| padrão | de onde vem |
+|---|---|
+| `sqlite_error` | código de erro do próprio SQLite: Node (`sqlite3`, o do Juice Shop), Java (sqlite-jdbc) |
+| `sqliteerror` | Node, `better-sqlite3` |
+| `sqliteexception` | Java, .NET (`Microsoft.Data.Sqlite`, `System.Data.SQLite`), Android |
+| `sqlite3::` | Ruby (`SQLite3::SQLException`), PHP (`SQLite3::query()`) |
+
+`sqlite3.operationalerror` (Python) continua. O corpo passou a ir para minúsculas com
+`Locale.ROOT`: no locale turco o "I" de `SQLITE_ERROR` viraria "ı" e não casaria.
+
+Verificado ao vivo (container `backend` rebuildado), como qa-enterprise: ativo em
+`http://juice-shop:3000/rest/products/search?q=apple` → `dbErrorLeakageSuspected:true`
+(antes `false`); a nota caiu de 37 para 22, agora contando o achado. Passivo inalterado.
+
+Observação lateral, fora deste fix: o probe manda `Accept: text/html,...,/;q=0.8` — o
+`/` era para ser `*/*`. Não muda nada no Juice Shop (ele responde HTML), mas uma API que
+só serve JSON e respeita o `Accept` à risca pode responder 406 em vez do erro.
 
 ## Teste de regressão
 
-(pendente — Backend: teste do probe contra uma resposta com `SQLITE_ERROR`; QA: parte de
-SQLi do SCAN-03.)
+- Backend: `ErrorDisclosureServiceTest` (novo). Servidor local que responde o erro só
+  quando o valor termina em `'`, como o Juice Shop; um caso por driver (Node `sqlite3`
+  com o HTML escapado do Express, `better-sqlite3`, sqlite-jdbc, `Microsoft.Data.Sqlite`,
+  Ruby, PHP) — os 6 falhavam antes do fix —, mais o controle do Python (já passava) e
+  "sem erro de banco → sem achado". Também confere que a aspa é anexada ao valor
+  (`apple'`). Suíte inteira verde (674).
+- QA: libera a parte de SQLi do SCAN-03. O SCAN-03 só sai do `@Disabled` com a parte de
+  XSS num alvo que ecoe o parâmetro (ver BUG-03, "O que o fix NÃO resolve").
 ```

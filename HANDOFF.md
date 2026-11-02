@@ -543,13 +543,29 @@ nos comandos de commit; a fila do dono vai acumulando no fim desta seção.
     certo. A parte de XSS precisa de outro alvo — ex. um stub do WireMock que ecoe o
     parâmetro sem escapar (infra, posso montar quando chegar a hora).
 
-### Próximas etapas
-BUG-06 (destrava o SQLi do SCAN-03) e BUG-04 (replay do TOTP; AUTH-04) — ordem a combinar
-com o dono.
+### Etapa 5 — BUG-06 ✅ corrigido (probe de SQL não reconhecia SQLite) — 2026-11-01
+- **Fix:** `ErrorDisclosureService.containsDbErrorPatterns` ganhou o SQLite de cada
+  driver (`sqlite_error` Node/Java, `sqliteerror` better-sqlite3, `sqliteexception`
+  Java/.NET/Android, `sqlite3::` Ruby/PHP); corpo em minúsculas com `Locale.ROOT`.
+  Regressão: `ErrorDisclosureServiceTest` (8 casos; os 6 de driver falhavam antes).
+  Suíte do Backend: 674 verdes. Container `backend` rebuildado. Suíte RestAssured do
+  dono: 44, 0 falhas, 2 pulados.
+- **Ao vivo (qa-enterprise):** ativo em `http://juice-shop:3000/rest/products/search?q=apple`
+  → `dbErrorLeakageSuspected:true` (antes `false`); nota 37 → 22.
+- **SCAN-03 sem bug de produto pendente.** O que falta é do caso: a parte de XSS precisa
+  de um alvo que ecoe o parâmetro do lado do servidor (esse endpoint não ecoa; `false`
+  ali está certo). O SQLi já pode ser asserido nesse mesmo URL.
+- Observação lateral, não corrigida: o probe manda `Accept: ...,/;q=0.8` (era `*/*`);
+  irrelevante no Juice Shop, pode dar 406 numa API só-JSON estrita. Anotado no BUG-06.
+
+### Próxima etapa — BUG-04 (replay do TOTP; AUTH-04)
+Última da rodada. Depois dela, a fila abaixo.
 
 ### Fila do dono — depois da rodada de bugs
 - **AUTH-05** (BUG-01) — contrato na Etapa 1.
 - **SSRF-03 hex** (BUG-02) — tirar o `@Disabled`; opcional `0177.0.0.1`. Etapa 2.
 - **SSRF-07** (BUG-05) — contrato e armadilhas na Etapa 3.
 - **SCAN-01** (BUG-03) — contrato na Etapa 4.
-- **SCAN-03** — só depois do BUG-06 e da troca do alvo de XSS.
+- **SCAN-03** — produto pronto (BUG-03 + BUG-06). SQLi: `dbErrorLeakageSuspected:true` no
+  `/rest/products/search?q=apple` (Etapa 5). XSS: precisa de outro alvo; o stub do
+  WireMock que ecoa o parâmetro é infra, o Claude monta quando o dono chegar nesse caso.
