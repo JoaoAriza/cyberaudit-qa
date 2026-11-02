@@ -558,14 +558,46 @@ nos comandos de commit; a fila do dono vai acumulando no fim desta seção.
 - Observação lateral, não corrigida: o probe manda `Accept: ...,/;q=0.8` (era `*/*`);
   irrelevante no Juice Shop, pode dar 406 numa API só-JSON estrita. Anotado no BUG-06.
 
-### Próxima etapa — BUG-04 (replay do TOTP; AUTH-04)
-Última da rodada. Depois dela, a fila abaixo.
+### Etapa 6 — BUG-04 ✅ corrigido (código TOTP reutilizável) — 2026-11-01
+- **Fix:** coluna nova `AppUser.totpLastUsedStep` (janela de 30 s do último código aceito,
+  `updatable = false`); `TotpService.matchingTimeStep` diz qual janela casou;
+  `AppUserRepository.consumeTotpStep` é uma UPDATE que só grava se a janela for mais nova
+  (barra pedidos simultâneos). Login e ativação do TOTP consomem o código. Regressão:
+  `TotpReplayIntegrationTest` (4, rota real) + 3 casos no `TotpServiceTest`. Suíte do
+  Backend: 681 verdes. Container `backend` rebuildado (coluna criada pelo `ddl-auto`).
+- **Ao vivo (qa-free, mesmo pré-auth):** código N → 200; N de novo → 422 "já utilizado";
+  N+1 → 200; N de novo → 422; `000000` → 422 "inválido".
+- **Destrava AUTH-04 (dono escreve).** O que prova: um código TOTP vale uma vez — quem
+  observar um código não consegue cunhar uma segunda sessão com ele. Contrato:
+  - `POST /auth/login {email, password}` → 200, `requires2fa:true`, `token` pré-auth.
+  - `POST /auth/2fa/verify` com `Authorization: Bearer <pré-auth>` e
+    `{"code":"...","method":"TOTP"}` → válido **200** (`token` de sessão); sem código ou
+    errado → **422** `message:"Código TOTP inválido."`; o mesmo código de novo → **422**
+    `message:"Código TOTP já utilizado. Aguarde o próximo código no aplicativo."`.
+  - Precisa gerar o código em Java: lib de TOTP no pom do RestAssured (ex.
+    `dev.samstevens.totp:totp`, a mesma do Backend). Segredo de teste no seed.
+- **Armadilhas novas (valem pra TODO login real com TOTP nas suítes):**
+  - Cada código passa **uma vez por usuário**. Dois logins reais do mesmo usuário na mesma
+    janela de 30 s → o segundo leva 422. Rodar o AUTH-04 duas vezes seguidas em menos de
+    30 s quebra o controle positivo da 2ª execução — espere a janela virar.
+  - Use **conta dedicada**: AUTH-04 com qa-free; o UI-01 (Cypress) já loga como qa-pro.
+    Na CI as suítes rodam em sequência no mesmo backend (RestAssured → Newman → Cypress),
+    então usuários diferentes evitam colisão. O mesmo vale pro UI-01 em Selenium quando
+    sair: não usar o qa-pro na mesma janela que o Cypress.
+  - Throttle de 2FA: 5 falhas → 429 por 15 min para aquele usuário (em memória; rebuild do
+    container zera). Um sucesso zera a contagem — intercale o válido entre os negativos.
+  - Os casos que usam `forgeToken` (bypass) não são afetados: não passam pelo 2FA.
+
+### Rodada de bugs fechada (2026-11-01)
+BUG-01 a BUG-06 corrigidos no Backend, cada um com regressão na suíte dele (622 → 681).
+Nenhum caso da matriz está mais em 🐛. Próximo passo: a fila do dono abaixo.
 
 ### Fila do dono — depois da rodada de bugs
 - **AUTH-05** (BUG-01) — contrato na Etapa 1.
 - **SSRF-03 hex** (BUG-02) — tirar o `@Disabled`; opcional `0177.0.0.1`. Etapa 2.
 - **SSRF-07** (BUG-05) — contrato e armadilhas na Etapa 3.
 - **SCAN-01** (BUG-03) — contrato na Etapa 4.
+- **AUTH-04** (BUG-04) — contrato e armadilhas na Etapa 6 (lib TOTP no pom, conta qa-free).
 - **SCAN-03** — produto pronto (BUG-03 + BUG-06). SQLi: `dbErrorLeakageSuspected:true` no
   `/rest/products/search?q=apple` (Etapa 5). XSS: precisa de outro alvo; o stub do
   WireMock que ecoa o parâmetro é infra, o Claude monta quando o dono chegar nesse caso.

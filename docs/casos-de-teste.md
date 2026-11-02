@@ -30,7 +30,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | AUTH-01 | Autenticação | Login com credenciais válidas | JWT emitido, acesso liberado | Postman, RestAssured | P0 | ✅ Passou — Postman (2026-10-01) e RestAssured (2026-10-03) |
 | AUTH-02 | Autenticação | Senha errada e usuário inexistente | 401 com a mesma mensagem nos dois casos, sem revelar se o usuário existe | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-03) |
 | AUTH-03 | Autenticação | JWT expirado, assinatura adulterada, `alg: none` | 401 em todos | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) |
-| AUTH-04 | 2FA | Sem código TOTP, código inválido, código reutilizado | Acesso negado nos três | RestAssured, Cypress | P0 | 🐛 Reuso de TOTP não bloqueado (BUG-04, replay do 2º fator) — verificado 2026-10-26; sem-código/inválido → 422 (ok) e controle válido → 200, prontos pra automatizar; reuso fica @Disabled até o fix. Automação adiada (precisa lib TOTP no pom + conta 2FA dedicada) |
+| AUTH-04 | 2FA | Sem código TOTP, código inválido, código reutilizado | Acesso negado nos três | RestAssured, Cypress | P0 | 🔲 A fazer — BUG-04 corrigido no Backend (2026-11-01, `bugs/BUG-04-totp-replay.md`); desbloqueado: sem código/inválido → 422 "inválido", válido → 200, mesmo código de novo → 422 "já utilizado". Precisa lib TOTP no pom + conta 2FA dedicada (qa-free) |
 | AUTH-05 | API key | Chamada com API key revogada | 401 | Postman, RestAssured | P1 | 🔲 A fazer — BUG-01 corrigido no Backend (2026-10-29, `bugs/BUG-01-apikey-auth-lazyinit.md`); desbloqueado: chave válida → 200 (controle) e revogada → 401 |
 | AUTHZ-01 | Controle de acesso | Usuário A consulta scan do usuário B pelo ID | 403 ou 404, nunca os dados | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-08) |
 
@@ -397,3 +397,12 @@ O probe de erro de SQL passou a reconhecer o SQLite como cada driver o imprime (
 `sqliteerror`, `sqliteexception`, `sqlite3::`; antes só o do Python). Ao vivo: ativo no Juice Shop
 → `dbErrorLeakageSuspected:true`. SCAN-03 sai de 🐛 e vai pra 🔲: o que falta é do caso, não do
 produto — um alvo que ecoe o parâmetro para a parte de XSS.
+
+## 2026-11-01 — BUG-04 corrigido; AUTH-04 desbloqueado; rodada de bugs fechada
+
+O código TOTP passou a valer uma vez: o Backend grava a janela de 30 s do último código aceito
+e só aceita uma mais nova, numa UPDATE condicional (dois pedidos simultâneos com o mesmo código
+não passam os dois — antes, 6 de 6 passavam). Vale para o login e para a ativação do TOTP.
+Ao vivo: mesmo código com o mesmo pré-auth → 200 e depois 422 "já utilizado"; o código da
+janela seguinte passa. AUTH-04 sai de 🐛 e vai pra 🔲. Com isso os seis bugs registrados
+(BUG-01 a BUG-06) estão corrigidos; o que sobra é a automação dos casos destravados (dono).
