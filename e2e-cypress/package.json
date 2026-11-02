@@ -6,7 +6,9 @@
   "scripts": {
     "cy:open": "cypress open",
     "cy:run": "cypress run",
-    "smoke": "cypress run --spec cypress/e2e/smoke.cy.js"
+    "smoke": "cypress run --spec cypress/e2e/smoke.cy.js",
+    "demo": "cypress run --config-file cypress.demo.config.js --spec cypress/e2e/ui-01-login.cy.js,cypress/e2e/ui-02-scan-historico.cy.js",
+    "demo:falha": "cypress run --config-file cypress.demo.config.js --spec cypress/e2e/ui-01-login.cy.js --env emailPro=demo-falha@cyberaudit.test"
   },
   "devDependencies": {
     "@shelex/cypress-allure-plugin": "^2.41.2",
