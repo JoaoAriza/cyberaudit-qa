@@ -406,3 +406,11 @@ não passam os dois — antes, 6 de 6 passavam). Vale para o login e para a ativ
 Ao vivo: mesmo código com o mesmo pré-auth → 200 e depois 422 "já utilizado"; o código da
 janela seguinte passa. AUTH-04 sai de 🐛 e vai pra 🔲. Com isso os seis bugs registrados
 (BUG-01 a BUG-06) estão corrigidos; o que sobra é a automação dos casos destravados (dono).
+
+## 2026-11-02 — BUG-07 corrigido (probe de SQL com `Accept` inválido)
+
+A observação lateral do BUG-06 (`Accept: ...,/;q=0.8`, era `*/*`) virou bug ao ser testada
+contra um alvo em Spring: o Spring recusa a requisição inteira antes do controller, então o
+probe de SQL nunca via erro num alvo Spring. Fix de um caractere no Backend, com regressão lá
+(`bugs/BUG-07-probe-sql-accept-invalido.md`). Nenhum caso da matriz muda de status: o alvo de
+SQLi do SCAN-03 é Node, que tolera o cabeçalho. Rodada de bugs fechada com BUG-01 a BUG-07.

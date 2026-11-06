@@ -83,8 +83,9 @@ Verificado ao vivo (container `backend` rebuildado), como qa-enterprise: ativo e
 (antes `false`); a nota caiu de 37 para 22, agora contando o achado. Passivo inalterado.
 
 Observação lateral, fora deste fix: o probe manda `Accept: text/html,...,/;q=0.8` — o
-`/` era para ser `*/*`. Não muda nada no Juice Shop (ele responde HTML), mas uma API que
-só serve JSON e respeita o `Accept` à risca pode responder 406 em vez do erro.
+`/` era para ser `*/*`. Não muda nada no Juice Shop. **Reclassificada como bug em
+2026-11-02:** o Spring recusa a requisição inteira com esse cabeçalho, então nenhum alvo
+em Spring era testado — ver `BUG-07-probe-sql-accept-invalido.md`.
 
 ## Teste de regressão
 

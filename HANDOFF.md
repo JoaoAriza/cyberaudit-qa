@@ -555,8 +555,8 @@ nos comandos de commit; a fila do dono vai acumulando no fim desta seção.
 - **SCAN-03 sem bug de produto pendente.** O que falta é do caso: a parte de XSS precisa
   de um alvo que ecoe o parâmetro do lado do servidor (esse endpoint não ecoa; `false`
   ali está certo). O SQLi já pode ser asserido nesse mesmo URL.
-- Observação lateral, não corrigida: o probe manda `Accept: ...,/;q=0.8` (era `*/*`);
-  irrelevante no Juice Shop, pode dar 406 numa API só-JSON estrita. Anotado no BUG-06.
+- Observação lateral: o probe manda `Accept: ...,/;q=0.8` (era `*/*`); irrelevante no
+  Juice Shop. Virou o **BUG-07** (Etapa 7) quando testado contra um alvo em Spring.
 
 ### Etapa 6 — BUG-04 ✅ corrigido (código TOTP reutilizável) — 2026-11-01
 - **Fix:** coluna nova `AppUser.totpLastUsedStep` (janela de 30 s do último código aceito,
@@ -588,8 +588,21 @@ nos comandos de commit; a fila do dono vai acumulando no fim desta seção.
     container zera). Um sucesso zera a contagem — intercale o válido entre os negativos.
   - Os casos que usam `forgeToken` (bypass) não são afetados: não passam pelo 2FA.
 
-### Rodada de bugs fechada (2026-11-01)
-BUG-01 a BUG-06 corrigidos no Backend, cada um com regressão na suíte dele (622 → 681).
+### Etapa 7 — BUG-07 ✅ corrigido (probe de SQL mandava `Accept` inválido) — 2026-11-02
+- **Achado:** a observação lateral do BUG-06, testada contra um alvo em Spring (o próprio
+  backend na 8081): com `...,/;q=0.8` o Spring loga `Could not parse 'Accept' header` e
+  recusa a requisição antes do controller (401 ali; 406 num Spring sem segurança). A
+  consulta com a aspa nem roda → nenhum alvo Spring era testado pelo probe de SQL. O Node
+  do Juice Shop tolera, por isso o BUG-06 passou ao vivo.
+- **Fix:** `*/*` no lugar de `/` em `ErrorDisclosureService` (um caractere). Regressão:
+  `alvoQueValidaOAcceptRecebeOProbe` no `ErrorDisclosureServiceTest` — o servidor local lê
+  o `Accept` com o parser do próprio Spring (`MediaType.parseMediaTypes`). Suíte do
+  Backend: 682 verdes. Container `backend` rebuildado; ativo no Juice Shop continua
+  `dbErrorLeakageSuspected:true`. Suíte RestAssured do dono: 44, 0 falhas, 2 pulados.
+- **Não destrava caso da fila** (nenhum caso cobre alvo Spring); coberto só no Backend.
+
+### Rodada de bugs fechada (2026-11-02)
+BUG-01 a BUG-07 corrigidos no Backend, cada um com regressão na suíte dele (622 → 682).
 Nenhum caso da matriz está mais em 🐛. Próximo passo: a fila do dono abaixo.
 
 ### Fila do dono — depois da rodada de bugs
