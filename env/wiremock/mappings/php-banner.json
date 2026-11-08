@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "ANY",
+    "url": "/",
+    "headers": {
+      "Host": { "matches": "php-banner-mock(:[0-9]+)?" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "X-Powered-By": "PHP/8.3.36"
+    },
+    "body": "<!doctype html><html><head><title>php-banner-mock</title></head><body><p>Alvo de teste: anuncia PHP 8.3.36 no X-Powered-By e nada mais.</p></body></html>"
+  },
+  "metadata": {
+    "caso": "SCAN-05",
+    "nota": "Responde so para o Host php-banner-mock (network alias do WireMock), so na raiz, em qualquer metodo: o fingerprint faz HEAD, nao GET (com GET so, o detectedVersions volta vazio e o CVE nem e consultado). O fingerprint le PHP 8.3.36 do X-Powered-By e o scanner consulta o NVD real por cpe:2.3:a:php:php:8.3.36. Sem o isVulnerable (BUG-08), o NVD devolvia o CVE-2013-2220 (extensao PECL radius, onde php:php e so plataforma, vulnerable:false). Host proprio = chave de cache de scan propria, sem colidir com wiremock (AUTHZ-01) nem redirect-mock (SSRF-05)."
+  }
+}
