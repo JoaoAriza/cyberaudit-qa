@@ -614,3 +614,62 @@ Nenhum caso da matriz está mais em 🐛. Próximo passo: a fila do dono abaixo.
 - **SCAN-03** — produto pronto (BUG-03 + BUG-06). SQLi: `dbErrorLeakageSuspected:true` no
   `/rest/products/search?q=apple` (Etapa 5). XSS: precisa de outro alvo; o stub do
   WireMock que ecoa o parâmetro é infra, o Claude monta quando o dono chegar nesse caso.
+- **SCAN-05** (BUG-08) — contrato e armadilhas na §11, Etapa A.
+
+## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
+
+Um cliente contestou itens do laudo do site dele (PHP 8.3.36 na Hostinger). O Claude
+conferiu cada item no código e ao vivo (API pública do NVD, DNS público), sem aceitar o
+feedback de cara. Saíram 7 etapas, aprovadas pelo dono, no mesmo ritmo da §10: uma por
+etapa, regressão no Backend, dono commita, caso de QA destravado entra na fila acima.
+O nome do cliente fica fora deste repositório (é público e o laudo é confidencial).
+
+- **A** — CVE de extensão vira CVE do PHP (`isVulnerable`). Bug. ✅ BUG-08.
+- **B** — DKIM: Hostinger fora da lista de provedores; chave revogada (`p=` vazio) conta
+  como encontrada. Bug.
+- **C** — Spoofing: DMARC `quarantine`/`reject` + SPF válido passa a LOW; `pct<100` não
+  conta como aplicado; SPF `+all` conta como quebrado; texto deixa de exigir `-all`.
+- **D** — HSTS ausente: rótulo HIGH → MEDIUM mantendo -10 (o HIGH acionava o override de
+  risco); textos de recomendação alinhados (31536000 x 2592000).
+- **E** — Cookies: atributos lidos de verdade (hoje `contains("secure")` no Set-Cookie
+  inteiro); cookie de CSRF sem exigir HttpOnly; `connect.sid` como sessão; severidade do
+  agregado = a do pior cookie; cookie que não é de sessão → LOW sem desconto.
+- **F** — Pesos por severidade: LOW custa no máximo 2 (versão exposta, robots.txt,
+  security.txt, Referrer/Permissions ausentes, sem WAF); robots.txt sem desconto quando
+  tudo responde 401/403. Muda a nota de todo scan.
+- **G** — Cosméticos: "null" no bônus de WAF; porta 80 INFO quando redireciona; hosts
+  relacionados no idioma do laudo (pool próprio sem `IdiomaThreads`).
+
+### Etapa A — BUG-08 ✅ corrigido (CVE de extensão como CVE do PHP) — 2026-11-07
+- **Achado:** o NVD registra "extensão X do PHP" como um AND — a extensão com
+  `vulnerable:true` e o `php:php` com `vulnerable:false` ("roda em PHP"). A consulta por
+  `cpeName` sem `isVulnerable` casa com os dois lados. Medido: `php:php:8.3.36` → 2 CVEs
+  sem o parâmetro, 1 com. O CVE-2013-2220 (PECL radius, 7.5) tirava -6.
+- **Fix:** `&isVulnerable` na URL + `produtoMarcadoVulneravel` no parse (descarta o CVE se
+  nenhum critério `vulnerable:true` é do nosso vendor:produto); javadocs corrigidos; URL do
+  NVD injetável só para o teste. Regressão: `CVEProdutoVulneravelTest` (6; 3 vermelhos
+  antes do fix). Suíte do Backend: 688 verdes. Container `backend` rebuildado (o 8099
+  continua na imagem antiga). Suíte RestAssured do dono: 44, 0 falhas, 2 pulados.
+- **Infra nova (Claude):** stub `env/wiremock/mappings/php-banner.json` e alias
+  `php-banner-mock` no WireMock + na `SSRF_TEST_ALLOWLIST` do `backend`. Exige recriar os
+  dois containers: `docker compose -f env/docker-compose.test.yml up -d wiremock backend`.
+- **Contrato do SCAN-05 (ao vivo, depois do fix):** qa-pro, `GET /scan?url=http://php-banner-mock:8080`
+  (passivo) → 200; `techFingerprint.detectedVersions` = `{"PHP":"8.3.36"}`;
+  `cveFindings` = só `CVE-2007-3205` (CVSS 5.0); nenhuma issue com id começando em
+  `CVE_` em `score.issues`; nenhuma nota com "CVE" em `score.notes`. Antes do fix:
+  `CVE-2013-2220` na lista, issue `CVE_CVE_2013_2220` (MEDIUM) e nota
+  `CVE potencial tier HIGH detectado: -6`.
+- **Armadilhas:**
+  - Alvo é o host `php-banner-mock`, não `wiremock`: a chave do cache de scan é o host, e
+    `wiremock` colide com o AUTHZ-01. O stub só responde para esse Host, só na raiz.
+  - O fingerprint faz **HEAD**, não GET — por isso o stub é `ANY`. Com GET só, o
+    `detectedVersions` volta vazio e o CVE nem é consultado (a asserção negativa passaria
+    sem testar nada).
+  - Depende do NVD real (internet do container, sem API key: 5 req/30 s). Se o NVD falhar
+    ou der 429, `cveFindings` volta `[]` e a asserção "sem CVE-2013-2220" passa à toa. Use
+    a presença do `CVE-2007-3205` como prova de que a consulta aconteceu; se um dia ele
+    sumir, é o NVD que mudou, não o produto. Não fixe a lista inteira nem o score exato.
+  - `score` é um objeto (`score.score`, `score.riskLevel`, `score.notes`, `score.issues`);
+    as issues de CVE têm id `CVE_` + o CVE com `_` (`CVE_CVE_2013_2220`).
+  - O cache de scan guarda o resultado do host: para ver o "antes" de novo, reinicie o
+    `backend` (cache em memória).

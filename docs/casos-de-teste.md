@@ -4,8 +4,8 @@ Consolida os 26 casos originais do escopo (`CyberAudit QA — Escopo do projeto 
 testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogados em
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
-Contagem atual (2026-10-29, com os casos acrescentados depois, como o SSRF-07): 42 casos
-— 21 P0, 19 P1, 2 P2.
+Contagem atual (2026-11-07, com os casos acrescentados depois, como o SSRF-07 e o
+SCAN-05): 43 casos — 21 P0, 20 P1, 2 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -63,6 +63,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SCAN-02 | Motor | Alvo com atraso forçado no WireMock | Módulo marcado como timeout, relatório indica resultado parcial | RestAssured + WireMock | P1 | 🔲 A fazer |
 | SCAN-03 | Motor | Varredura ativa no Juice Shop | XSS e SQL injection detectados | RestAssured | P0 | 🔲 A fazer, com alvo revisto — conexão (BUG-03) e SQLi (BUG-06) corrigidos: ativo no `/rest/products/search?q=apple` → `dbErrorLeakageSuspected:true`. Falta trocar o alvo da parte de XSS (esse endpoint não ecoa o `q` no servidor; `false` ali está certo). Teste `@Disabled` |
 | SCAN-04 | Motor | Alvo limpo com headers corretos | Nenhum falso positivo nesses módulos | RestAssured + WireMock | P1 | 🔲 A fazer |
+| SCAN-05 | Motor | Alvo que só anuncia `X-Powered-By: PHP/8.3.36` (stub `php-banner-mock`): CVE de extensão em que o PHP é só plataforma | `detectedVersions.PHP` = `8.3.36` (controle); `cveFindings` sem o CVE-2013-2220; nenhuma issue `CVE_*` nem nota "CVE potencial" no score | RestAssured + WireMock | P1 | 🔲 A fazer — BUG-08 corrigido no Backend (2026-11-07, `bugs/BUG-08-cve-de-extensao-como-cve-do-php.md`); contrato e armadilhas no HANDOFF §11 |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
 ## Relatório e interface
@@ -414,3 +415,13 @@ contra um alvo em Spring: o Spring recusa a requisição inteira antes do contro
 probe de SQL nunca via erro num alvo Spring. Fix de um caractere no Backend, com regressão lá
 (`bugs/BUG-07-probe-sql-accept-invalido.md`). Nenhum caso da matriz muda de status: o alvo de
 SQLi do SCAN-03 é Node, que tolera o cabeçalho. Rodada de bugs fechada com BUG-01 a BUG-07.
+
+## 2026-11-07 — BUG-08 corrigido (CVE de extensão como CVE do PHP); SCAN-05 novo
+
+Rodada nova, a partir do feedback de um cliente sobre o laudo (etapas A–G no HANDOFF §11).
+Etapa A: a correlação de CVE consultava o NVD por `cpeName` sem `isVulnerable`, e o NVD
+devolvia CVEs em que o PHP é só plataforma — um PHP 8.3.36 levou o CVE-2013-2220 (extensão
+PECL radius, CVSS 7.5) e -6 no score. Fix no Backend em duas camadas (parâmetro na consulta
+e conferência do lado vulnerável no parse), com regressão lá
+(`bugs/BUG-08-cve-de-extensao-como-cve-do-php.md`). Caso novo SCAN-05 (P1, 🔲) com stub
+próprio no WireMock (`php-banner-mock`, alias novo no compose).
