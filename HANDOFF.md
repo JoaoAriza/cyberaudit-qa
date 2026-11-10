@@ -615,6 +615,7 @@ Nenhum caso da matriz está mais em 🐛. Próximo passo: a fila do dono abaixo.
   `/rest/products/search?q=apple` (Etapa 5). XSS: precisa de outro alvo; o stub do
   WireMock que ecoa o parâmetro é infra, o Claude monta quando o dono chegar nesse caso.
 - **SCAN-05** (BUG-08) — contrato e armadilhas na §11, Etapa A.
+- **SCAN-06** (BUG-09) — espera o DNS falso da etapa C (§11, Etapa B).
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -626,7 +627,7 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
 
 - **A** — CVE de extensão vira CVE do PHP (`isVulnerable`). Bug. ✅ BUG-08.
 - **B** — DKIM: Hostinger fora da lista de provedores; chave revogada (`p=` vazio) conta
-  como encontrada. Bug.
+  como encontrada. Bug. ✅ BUG-09.
 - **C** — Spoofing: DMARC `quarantine`/`reject` + SPF válido passa a LOW; `pct<100` não
   conta como aplicado; SPF `+all` conta como quebrado; texto deixa de exigir `-all`.
 - **D** — HSTS ausente: rótulo HIGH → MEDIUM mantendo -10 (o HIGH acionava o override de
@@ -673,3 +674,23 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
     as issues de CVE têm id `CVE_` + o CVE com `_` (`CVE_CVE_2013_2220`).
   - O cache de scan guarda o resultado do host: para ver o "antes" de novo, reinicie o
     `backend` (cache em memória).
+
+### Etapa B — BUG-09 ✅ corrigido (DKIM da Hostinger e chave revogada) — 2026-11-09
+- **Achado:** conferido no DNS público do domínio do cliente — SPF
+  `include:_spf.mail.hostinger.com`, MX `mx1/mx2.hostinger.com`, e **três** seletores como
+  CNAME para `*.dkim.mail.hostinger.com`: `hostingermail-a` com chave, `-b` e `-c` com
+  `v=DKIM1;p=` (revogada). A Hostinger não estava na tabela, e a sonda contava qualquer TXT
+  como DKIM (`records.length > 0`) — os revogados contariam, e um TXT curinga também.
+- **Fix:** provedor `Hostinger` na tabela + seletores na reserva; `temChaveDkim` só conta
+  `p=` não vazio e descarta `v=` diferente de `DKIM1`. Regressão: `DkimChavePublicadaTest`
+  (12) + `DkimProviderHintTest` (+2); 9 vermelhos antes. Suíte do Backend: 702 verdes.
+  Container `backend` rebuildado; suíte RestAssured do dono: 44, 0 falhas, 2 pulados.
+- **Ao vivo:** o `DnsSecurityService` real rodado da máquina contra o DNS público (só DNS,
+  nenhum HTTP no site do cliente): antes `NOT_DETECTED`, depois `hostingermail-a`; a regra
+  aplicada aos TXT reais aceita o `-a` e recusa `-b`/`-c`. Não dá para mostrar pelo
+  `GET /scan` no ambiente: o scan do domínio real faria HTTP no site do cliente, e o
+  ambiente não tem DNS que a gente controle.
+- **SCAN-06 (P2) fica esperando infra:** o caso precisa de um DNS falso no ambiente
+  (zona de teste com SPF/MX da Hostinger e os seletores). Ele entra na etapa C, que
+  precisa da mesma infra para as variações de DMARC/SPF — o Claude monta e documenta o
+  contrato lá.

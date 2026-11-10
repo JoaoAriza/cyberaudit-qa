@@ -4,8 +4,8 @@ Consolida os 26 casos originais do escopo (`CyberAudit QA — Escopo do projeto 
 testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogados em
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
-Contagem atual (2026-11-07, com os casos acrescentados depois, como o SSRF-07 e o
-SCAN-05): 43 casos — 21 P0, 20 P1, 2 P2.
+Contagem atual (2026-11-09, com os casos acrescentados depois, como o SSRF-07, o
+SCAN-05 e o SCAN-06): 44 casos — 21 P0, 20 P1, 3 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -64,6 +64,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SCAN-03 | Motor | Varredura ativa no Juice Shop | XSS e SQL injection detectados | RestAssured | P0 | 🔲 A fazer, com alvo revisto — conexão (BUG-03) e SQLi (BUG-06) corrigidos: ativo no `/rest/products/search?q=apple` → `dbErrorLeakageSuspected:true`. Falta trocar o alvo da parte de XSS (esse endpoint não ecoa o `q` no servidor; `false` ali está certo). Teste `@Disabled` |
 | SCAN-04 | Motor | Alvo limpo com headers corretos | Nenhum falso positivo nesses módulos | RestAssured + WireMock | P1 | 🔲 A fazer |
 | SCAN-05 | Motor | Alvo que só anuncia `X-Powered-By: PHP/8.3.36` (stub `php-banner-mock`): CVE de extensão em que o PHP é só plataforma | `detectedVersions.PHP` = `8.3.36` (controle); `cveFindings` sem o CVE-2013-2220; nenhuma issue `CVE_*` nem nota "CVE potencial" no score | RestAssured + WireMock | P1 | 🔲 A fazer — BUG-08 corrigido no Backend (2026-11-07, `bugs/BUG-08-cve-de-extensao-como-cve-do-php.md`); contrato e armadilhas no HANDOFF §11 |
+| SCAN-06 | Motor | DKIM por provedor: domínio com SPF da Hostinger e seletores `hostingermail-a` (chave) + `-b`/`-c` revogados (`p=` vazio); domínio só com revogados; domínio com TXT curinga `v=spf1` | 1º: `dnsSecurityResult.dkimHintFound` true e `dkimSelector` `hostingermail-a`; 2º e 3º: `NOT_DETECTED` | RestAssured + DNS falso | P2 | 🔲 A fazer — BUG-09 corrigido no Backend (2026-11-09, `bugs/BUG-09-dkim-hostinger-e-chave-revogada.md`); depende do DNS falso no ambiente (infra da etapa C, HANDOFF §11) |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
 ## Relatório e interface
@@ -425,3 +426,12 @@ PECL radius, CVSS 7.5) e -6 no score. Fix no Backend em duas camadas (parâmetro
 e conferência do lado vulnerável no parse), com regressão lá
 (`bugs/BUG-08-cve-de-extensao-como-cve-do-php.md`). Caso novo SCAN-05 (P1, 🔲) com stub
 próprio no WireMock (`php-banner-mock`, alias novo no compose).
+
+## 2026-11-09 — BUG-09 corrigido (DKIM da Hostinger e chave revogada); SCAN-06 novo
+
+Etapa B do feedback de cliente (HANDOFF §11). A sonda de DKIM não conhecia a Hostinger
+(laudo dizia "não detectado" num domínio com DKIM em `hostingermail-a`) e contava qualquer TXT
+no seletor como DKIM — inclusive `v=DKIM1;p=`, chave revogada, que é como a Hostinger deixa
+o `-b` e o `-c`. Fix no Backend com regressão lá (`bugs/BUG-09-dkim-hostinger-e-chave-revogada.md`).
+Sem efeito no score (DKIM não entra no risco). Caso novo SCAN-06 (P2, 🔲), que depende de um
+DNS falso no ambiente — montado na etapa C, que precisa dele para as variações de DMARC/SPF.
