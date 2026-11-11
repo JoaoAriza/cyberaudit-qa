@@ -1,1 +1,0 @@
-{"message":"cardTokenId ausente — gere o token no navegador antes de chamar este endpoint.","error":"400 BAD_REQUEST"}
