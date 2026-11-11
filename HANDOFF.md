@@ -615,7 +615,8 @@ Nenhum caso da matriz está mais em 🐛. Próximo passo: a fila do dono abaixo.
   `/rest/products/search?q=apple` (Etapa 5). XSS: precisa de outro alvo; o stub do
   WireMock que ecoa o parâmetro é infra, o Claude monta quando o dono chegar nesse caso.
 - **SCAN-05** (BUG-08) — contrato e armadilhas na §11, Etapa A.
-- **SCAN-06** (BUG-09) — espera o DNS falso da etapa C (§11, Etapa B).
+- **SCAN-06** (BUG-09) — desbloqueado pelo DNS falso; contrato na §11, Etapa C.
+- **SCAN-07** (BUG-10) — contrato e armadilhas na §11, Etapa C.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -630,6 +631,7 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
   como encontrada. Bug. ✅ BUG-09.
 - **C** — Spoofing: DMARC `quarantine`/`reject` + SPF válido passa a LOW; `pct<100` não
   conta como aplicado; SPF `+all` conta como quebrado; texto deixa de exigir `-all`.
+  ✅ BUG-10 (+ DNS falso no ambiente).
 - **D** — HSTS ausente: rótulo HIGH → MEDIUM mantendo -10 (o HIGH acionava o override de
   risco); textos de recomendação alinhados (31536000 x 2592000).
 - **E** — Cookies: atributos lidos de verdade (hoje `contains("secure")` no Set-Cookie
@@ -694,3 +696,45 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
   (zona de teste com SPF/MX da Hostinger e os seletores). Ele entra na etapa C, que
   precisa da mesma infra para as variações de DMARC/SPF — o Claude monta e documenta o
   contrato lá.
+
+### Etapa C — BUG-10 ✅ corrigido (régua do risco de spoofing) — 2026-11-10
+- **Achado:** LOW exigia SPF `-all` E DMARC `p=reject`. O cliente tem `~all` +
+  `p=quarantine` (conferido no DNS público) e perdia -6 como "proteção parcial"; sair de
+  `p=none` para `quarantine` não mexia no score. Com DMARC em bloqueio o qualificador do SPF
+  não muda o destino do falso (fail/softfail/neutral reprovam igual no DMARC). Do outro
+  lado, `+all` — que faz o falso PASSAR alinhado e anula o DMARC — saía MEDIUM, e `pct=` era
+  ignorado.
+- **Fix:** LOW = SPF válido + DMARC em bloqueio (`reject` com qualquer `pct`; `quarantine`
+  só com `pct` 100). `+all`/`all` = SPF quebrado (HIGH com DMARC, CRITICAL sem). Política do
+  SPF pelo qualificador do termo `all`, não por substring. Textos MEDIUM/LOW/recomendação
+  revistos (pt-BR e en), texto novo para o `+all`, HIGH de SPF duplicado aponta o SPF.
+  Regressão: `SpoofingEmBloqueioTest` (30; 16 vermelhos antes). Suíte do Backend: 732
+  verdes. Suíte RestAssured do dono: 44, 0 falhas, 2 pulados. Decisões (reject parcial,
+  `?all`, `+all` não CRITICAL) e o que ficou de fora: no BUG-10.
+- **Infra nova (Claude): DNS falso.** Serviço `coredns` no compose servindo a zona
+  `dns-mock.test` (`env/coredns/`, README com a tabela de domínios e como conferir). O
+  backend aponta o dnsjava para ele (`JAVA_TOOL_OPTIONS=-Ddns.server=coredns`,
+  `DNS_RESOLVER=system`); o HTTP do scan continua no DNS do Docker, por isso cada domínio é
+  também alias do WireMock (stub `dns-mock.json`) e está na `SSRF_TEST_ALLOWLIST`. Subir:
+  `docker compose -f env/docker-compose.test.yml up -d --build coredns wiremock backend`.
+  Só o `backend` (8081) usa o DNS falso; o 8099 não.
+- **Contrato (ao vivo, depois do fix):** qa-pro, `GET /scan?url=http://<dominio>:8080`
+  (passivo) → 200. Campos em `dnsSecurityResult`.
+  - SCAN-06: `dkim-hostinger.dns-mock.test` → `dkimHintFound` true, `dkimSelector`
+    `hostingermail-a`; `dkim-revogado` e `dkim-curinga` → false, `NOT_DETECTED`.
+  - SCAN-07: `quarantine` → `emailSpoofingRisk` LOW; `quarantine-pct50` → MEDIUM;
+    `reject-pct25` → LOW; `spf-mais-all` → HIGH; `dmarc-none` → MEDIUM. Em `score.notes`,
+    `DNS Security (email spoofing risk MEDIUM): -6` (ou `HIGH): -12`) só nos MEDIUM/HIGH;
+    em `score.issues`, `DNS_EMAIL_SPOOFING` com `severity` = o risco, só nos MEDIUM/HIGH.
+    Antes do fix: `quarantine` MEDIUM -6 e `spf-mais-all` MEDIUM -6.
+- **Armadilhas:**
+  - Confira `dnsSecurityResult.lookupFailed == false` antes de tudo. Se o CoreDNS não
+    respondeu, o risco vira `UNKNOWN`, sem nota — e "LOW sem nota" passaria à toa.
+  - `dkim-revogado` e `dkim-curinga` não têm DMARC, então saem HIGH. É esperado e não é
+    do SCAN-06: não afirme risco nesses dois.
+  - Não fixe `score.score` nem o texto do `summary` (depende do idioma da requisição); no
+    `spf-mais-all`, no máximo `summary` contém `+all`.
+  - Cache de scan por host: o primeiro scan de cada domínio vale até reiniciar o
+    `backend`. Editou a zona, incremente o serial do SOA e reinicie o `backend`.
+  - Vermelho de verdade (failing-first) só com o backend buildado antes do fix:
+    `9f9e84e` para o SCAN-07, `7b3236d` para o SCAN-06.
