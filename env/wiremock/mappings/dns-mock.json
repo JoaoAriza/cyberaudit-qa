@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "ANY",
+    "url": "/",
+    "headers": {
+      "Host": { "matches": "[a-z0-9-]+\\.dns-mock\\.test(:[0-9]+)?" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8"
+    },
+    "body": "<!doctype html><html><head><title>dns-mock</title></head><body><p>Alvo de teste: o que importa neste dominio sao os registros de email no DNS falso (env/coredns).</p></body></html>"
+  },
+  "metadata": {
+    "caso": "SCAN-06, SCAN-07",
+    "nota": "Pagina neutra para os alvos *.dns-mock.test (network aliases do WireMock). Os registros SPF/DMARC/MX/DKIM desses dominios vem do CoreDNS (env/coredns/dns-mock.test.db); o backend consulta o CoreDNS via -Ddns.server=coredns. So a raiz responde 200; o resto cai no 404 padrao."
+  }
+}

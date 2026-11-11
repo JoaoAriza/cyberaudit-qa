@@ -1,8 +1,8 @@
 # Ambiente de teste do cyberaudit-qa — Fase 1 do plano de teste.
 #
 # `docker compose -f env/docker-compose.test.yml up --build` sobe os cinco
-# serviços do escopo (backend, frontend, PostgreSQL, Juice Shop, WireMock) mais
-# um seeder que roda uma vez e sai. Espera o `seeder` terminar (exit 0) antes de
+# serviços do escopo (backend, frontend, PostgreSQL, Juice Shop, WireMock), o DNS
+# falso (coredns) e o backend gêmeo do SSRF-06, mais um seeder que roda uma vez e sai. Espera o `seeder` terminar (exit 0) antes de
 # considerar o ambiente pronto — ele só roda depois que o backend responde
 # saudável, porque precisa que o Hibernate já tenha criado o schema
 # (ddl-auto=update, não existe migração separada neste projeto).
@@ -73,7 +73,16 @@ services:
       # (169.254.169.254) continua bloqueado no hop. Host distinto de "wiremock" → chave
       # de cache de scan diferente → sem colisão com o AUTHZ-01 (que escaneia wiremock).
       # php-banner-mock: outro alias do WireMock, só anuncia PHP 8.3.36 (SCAN-05/BUG-08).
-      SSRF_TEST_ALLOWLIST: juice-shop,wiremock,redirect-mock,php-banner-mock
+      # *.dns-mock.test: alvos do DNS falso (SCAN-06/BUG-09, SCAN-07/BUG-10) — ver o
+      # serviço coredns abaixo. A allowlist é por nome exato, por isso a lista inteira.
+      SSRF_TEST_ALLOWLIST: juice-shop,wiremock,redirect-mock,php-banner-mock,dkim-hostinger.dns-mock.test,dkim-revogado.dns-mock.test,dkim-curinga.dns-mock.test,quarantine.dns-mock.test,quarantine-pct50.dns-mock.test,reject-pct25.dns-mock.test,spf-mais-all.dns-mock.test,dmarc-none.dns-mock.test
+      # DNS falso: o módulo de DNS (dnsjava) pergunta SPF/DMARC/MX/DKIM ao CoreDNS em
+      # vez do DNS do Docker. dns.server é lido pelo dnsjava; o resto da JVM (HTTP,
+      # SsrfGuard) segue no DNS do Docker. JAVA_TOOL_OPTIONS soma ao JAVA_OPTS da
+      # imagem em vez de substituí-lo. DNS_RESOLVER=system impede que, com o CoreDNS
+      # lento no boot, o DnsResolverConfig caia para DoH público e pule a zona falsa.
+      JAVA_TOOL_OPTIONS: "-Ddns.server=coredns"
+      DNS_RESOLVER: system
     # SSRF-04: nomes "públicos" que resolvem para IP interno/privado via /etc/hosts
     # do container — sem depender de DNS externo (nip.io) numa CI isolada. Nenhum
     # deles está na SSRF_TEST_ALLOWLIST, então o guard resolve → vê IP interno →
@@ -88,12 +97,26 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # O dnsjava resolve o nome "coredns" uma vez, no boot. A imagem do CoreDNS
+      # não tem shell para healthcheck; "started" basta, ele sobe em milissegundos.
+      coredns:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/actuator/health"]
       interval: 5s
       timeout: 3s
       retries: 20
       start_period: 30s
+
+  # DNS falso (SCAN-06, SCAN-07). Serve a zona dns-mock.test de env/coredns/ e
+  # repassa todo o resto para o DNS do Docker. Só o `backend` aponta para ele —
+  # o backend-noallowlist fica no DNS normal. Sem porta publicada: para conferir a
+  # zona, pergunte de dentro da rede (comando no env/coredns/README.md).
+  coredns:
+    image: coredns/coredns:1.11.3
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./coredns:/etc/coredns:ro
 
   # Backend GÊMEO do caso SSRF-06. É o MESMO build e os MESMOS envs do `backend`,
   # com UMA diferença deliberada: NÃO define SPRING_PROFILES_ACTIVE=qa-docker.
@@ -176,11 +199,21 @@ services:
     # Usado pelo SSRF-05 (host allowlistado, mas com chave de cache distinta de
     # "wiremock" — evita colidir com o scan de wiremock do AUTHZ-01).
     # "php-banner-mock": o SCAN-05 (BUG-08) — o stub php-banner.json casa pelo Host.
+    # *.dns-mock.test: os alvos do DNS falso (SCAN-06, SCAN-07). O alias dá o A (o
+    # HTTP do scan cai aqui, stub dns-mock.json); os registros de email vêm do coredns.
     networks:
       default:
         aliases:
           - redirect-mock
           - php-banner-mock
+          - dkim-hostinger.dns-mock.test
+          - dkim-revogado.dns-mock.test
+          - dkim-curinga.dns-mock.test
+          - quarantine.dns-mock.test
+          - quarantine-pct50.dns-mock.test
+          - reject-pct25.dns-mock.test
+          - spf-mais-all.dns-mock.test
+          - dmarc-none.dns-mock.test
 
   # Roda uma vez (popula os usuários de seed) e sai — não faz parte do "up"
   # de longa duração. `docker compose ... up seeder` ou aguardar o exit 0 no

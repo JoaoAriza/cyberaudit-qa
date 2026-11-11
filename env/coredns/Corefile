@@ -1,0 +1,17 @@
+# DNS falso do ambiente de teste. Ver README.md desta pasta.
+#
+# A zona dns-mock.test e servida daqui. Todo o resto vai para o DNS do proprio
+# container (o DNS embutido do Docker, que repassa para o do host) - o backend
+# continua resolvendo o mundo real normalmente: NVD, certspotter, etc.
+
+dns-mock.test:53 {
+    file /etc/coredns/dns-mock.test.db
+    log
+    errors
+}
+
+.:53 {
+    forward . /etc/resolv.conf
+    cache 30
+    errors
+}

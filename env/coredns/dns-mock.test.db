@@ -1,0 +1,82 @@
+; Zona de teste servida pelo CoreDNS do ambiente. Ver README.md desta pasta.
+;
+; Cada dominio abaixo e um ALVO de scan (o host vira a chave de cache do scan,
+; entao cada cenario tem o seu). Para o scan conseguir buscar a pagina, o mesmo
+; nome e network alias do WireMock no docker-compose e esta na SSRF_TEST_ALLOWLIST.
+; So os registros de email (TXT/MX) moram aqui; o A vem do DNS do Docker.
+;
+; TTL curto para que editar este arquivo valha em segundos (o CoreDNS rele a
+; zona quando o serial muda - incremente o serial ao editar).
+
+$ORIGIN dns-mock.test.
+$TTL 5
+@   IN SOA ns.dns-mock.test. qa.dns-mock.test. ( 2026111001 60 60 600 5 )
+@   IN NS  ns.dns-mock.test.
+ns  IN A   192.0.2.53          ; TEST-NET-1, ninguem consulta
+
+; ---------------------------------------------------------------------------
+; SCAN-06 (BUG-09) - DKIM da Hostinger
+; ---------------------------------------------------------------------------
+; Como a Hostinger publica: os tres seletores sao CNAME para a zona do
+; provedor; so o -a tem chave, -b e -c ficam revogados (p= vazio).
+; Esperado: dkimHintFound true, dkimSelector hostingermail-a.
+
+dkim-hostinger                              TXT   "v=spf1 include:_spf.mail.hostinger.com ~all"
+dkim-hostinger                              MX 5  mx1.hostinger.com.
+dkim-hostinger                              MX 10 mx2.hostinger.com.
+_dmarc.dkim-hostinger                       TXT   "v=DMARC1; p=quarantine"
+hostingermail-a._domainkey.dkim-hostinger   CNAME hostingermail-a.dkim.provedor-falso
+hostingermail-b._domainkey.dkim-hostinger   CNAME hostingermail-b.dkim.provedor-falso
+hostingermail-c._domainkey.dkim-hostinger   CNAME hostingermail-c.dkim.provedor-falso
+
+; Chave de mentira (base64 valido, nao e chave RSA de verdade): o scanner so
+; confere se o p= tem conteudo.
+hostingermail-a.dkim.provedor-falso         TXT   "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCchavedementiradoambientedeteste0000IDAQAB"
+hostingermail-b.dkim.provedor-falso         TXT   "v=DKIM1; p="
+hostingermail-c.dkim.provedor-falso         TXT   "v=DKIM1; p="
+
+; Mesmo provedor, os tres seletores revogados.
+; Esperado: dkimHintFound false, dkimSelector NOT_DETECTED (antes do fix: hostingermail-a).
+
+dkim-revogado                               TXT   "v=spf1 include:_spf.mail.hostinger.com ~all"
+dkim-revogado                               MX 5  mx1.hostinger.com.
+hostingermail-a._domainkey.dkim-revogado    TXT   "v=DKIM1; p="
+hostingermail-b._domainkey.dkim-revogado    TXT   "v=DKIM1; p="
+hostingermail-c._domainkey.dkim-revogado    TXT   "v=DKIM1; p="
+
+; TXT curinga: todo nome abaixo do dominio "existe" e devolve o SPF.
+; Esperado: dkimHintFound false, dkimSelector NOT_DETECTED (antes do fix: o
+; primeiro seletor sondado contava como encontrado).
+
+dkim-curinga                                TXT   "v=spf1 include:_spf.mail.hostinger.com ~all"
+*.dkim-curinga                              TXT   "v=spf1 include:_spf.mail.hostinger.com ~all"
+
+; ---------------------------------------------------------------------------
+; SCAN-07 (BUG-10) - risco de email spoofing
+; ---------------------------------------------------------------------------
+; Esperado (emailSpoofingRisk / desconto no score):
+;   quarantine        LOW    sem desconto   (antes do fix: MEDIUM, -6) - o caso do laudo
+;   quarantine-pct50  MEDIUM -6             quarantine so em metade das mensagens
+;   reject-pct25      LOW    sem desconto   o que fica fora do pct de um reject cai em quarantine
+;   spf-mais-all      HIGH   -12            (antes do fix: MEDIUM, -6) +all anula o DMARC
+;   dmarc-none        MEDIUM -6             p=none nao manda barrar nada
+
+quarantine                                  TXT   "v=spf1 include:_spf.mail.hostinger.com ~all"
+quarantine                                  MX 5  mx1.hostinger.com.
+_dmarc.quarantine                           TXT   "v=DMARC1; p=quarantine"
+
+quarantine-pct50                            TXT   "v=spf1 include:_spf.mail.hostinger.com ~all"
+quarantine-pct50                            MX 5  mx1.hostinger.com.
+_dmarc.quarantine-pct50                     TXT   "v=DMARC1; p=quarantine; pct=50"
+
+reject-pct25                                TXT   "v=spf1 include:amazonses.com -all"
+reject-pct25                                MX 10 inbound-smtp.us-east-1.amazonaws.com.
+_dmarc.reject-pct25                         TXT   "v=DMARC1; p=reject; pct=25"
+
+spf-mais-all                                TXT   "v=spf1 +all"
+spf-mais-all                                MX 5  mx1.hostinger.com.
+_dmarc.spf-mais-all                         TXT   "v=DMARC1; p=reject"
+
+dmarc-none                                  TXT   "v=spf1 include:_spf.mail.hostinger.com ~all"
+dmarc-none                                  MX 5  mx1.hostinger.com.
+_dmarc.dmarc-none                           TXT   "v=DMARC1; p=none"
