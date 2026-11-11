@@ -1,1 +1,0 @@
-{"error":"400 BAD_REQUEST","message":"CPF inválido: informe os 11 dígitos, com ou sem pontuação."}
