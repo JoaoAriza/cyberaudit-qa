@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "ANY",
+    "url": "/",
+    "headers": {
+      "Host": { "matches": "sem-hsts-mock(:[0-9]+)?" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8"
+    },
+    "body": "<!doctype html><html><head><title>sem-hsts-mock</title></head><body><p>Alvo de teste: nao manda Strict-Transport-Security.</p></body></html>"
+  },
+  "metadata": {
+    "caso": "SCAN-08",
+    "nota": "Responde so para o Host sem-hsts-mock (network alias do WireMock), so na raiz, em qualquer metodo, sem Strict-Transport-Security. O laudo deve trazer HSTS_MISSING com severidade MEDIUM e a nota 'HSTS ausente: -10' (BUG-11: era HIGH). O alvo nao tem HTTPS valido, entao o risco geral sai alto por outros achados - o piso de risco do HSTS so e testavel no Backend (HstsAusenteRotuloTest). Host proprio = chave de cache de scan propria."
+  }
+}
