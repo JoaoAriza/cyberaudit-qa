@@ -617,6 +617,7 @@ Nenhum caso da matriz está mais em 🐛. Próximo passo: a fila do dono abaixo.
 - **SCAN-05** (BUG-08) — contrato e armadilhas na §11, Etapa A.
 - **SCAN-06** (BUG-09) — desbloqueado pelo DNS falso; contrato na §11, Etapa C.
 - **SCAN-07** (BUG-10) — contrato e armadilhas na §11, Etapa C.
+- **SCAN-08** (BUG-11) — contrato e armadilhas na §11, Etapa D.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -633,7 +634,7 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
   conta como aplicado; SPF `+all` conta como quebrado; texto deixa de exigir `-all`.
   ✅ BUG-10 (+ DNS falso no ambiente).
 - **D** — HSTS ausente: rótulo HIGH → MEDIUM mantendo -10 (o HIGH acionava o override de
-  risco); textos de recomendação alinhados (31536000 x 2592000).
+  risco); textos de recomendação alinhados (31536000 x 2592000). ✅ BUG-11.
 - **E** — Cookies: atributos lidos de verdade (hoje `contains("secure")` no Set-Cookie
   inteiro); cookie de CSRF sem exigir HttpOnly; `connect.sid` como sessão; severidade do
   agregado = a do pior cookie; cookie que não é de sessão → LOW sem desconto.
@@ -738,3 +739,29 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
     `backend`. Editou a zona, incremente o serial do SOA e reinicie o `backend`.
   - Vermelho de verdade (failing-first) só com o backend buildado antes do fix:
     `9f9e84e` para o SCAN-07, `7b3236d` para o SCAN-06.
+
+### Etapa D — BUG-11 ✅ corrigido (HSTS ausente rotulado HIGH) — 2026-11-11
+- **Achado:** `HSTS_MISSING` saía HIGH. O -10 está certo, mas qualquer issue HIGH aciona o
+  piso de risco do `ScoreService` (`riskLevel` no mínimo MEDIUM): site sem outro achado,
+  nota 90, saía "risco médio". E as recomendações davam duas metas (`31536000` no ausente,
+  "`>= 2592000`" no fraco). O argumento do cliente ("sem HSTS sobra a janela do primeiro
+  acesso") estava invertido — ver o BUG-11.
+- **Fix:** `HSTS_MISSING` MEDIUM, -10 mantido. Textos pt-BR/en: mesma meta (1 ano), mesmo piso
+  (30 dias, o limite do `HeaderService`), impacto explicando a janela de verdade. Regressão:
+  `HstsAusenteRotuloTest` (6; 3 vermelhos antes). Suíte do Backend: 738 verdes. Suíte
+  RestAssured do dono: 44, 0 falhas, 2 pulados.
+- **Infra nova (Claude):** stub `env/wiremock/mappings/sem-hsts.json` e alias `sem-hsts-mock`
+  no WireMock + na `SSRF_TEST_ALLOWLIST` do `backend`. Recriar os dois:
+  `docker compose -f env/docker-compose.test.yml up -d wiremock backend`.
+- **Contrato do SCAN-08 (ao vivo, depois do fix):** qa-pro, `GET /scan?url=http://sem-hsts-mock:8080`
+  (passivo) → 200; `headers["Strict-Transport-Security"]` = `MISSING`; em `score.issues`,
+  `HSTS_MISSING` com `severity` MEDIUM; em `score.notes`, `HSTS ausente: -10`. Antes do fix
+  (imagem `dc1c999`, mesmo alvo): `severity` HIGH, nota igual.
+- **Armadilhas:**
+  - O piso de risco (nota 90 que não pode virar MEDIUM) não dá para testar aqui: o alvo não
+    tem HTTPS válido, então `SSL_INVALID` e `CSP_MISSING` (HIGH) já levam o `riskLevel` a
+    HIGH. Não afirme `riskLevel` nem `score.score` no SCAN-08 — o piso está coberto no
+    Backend (`HstsAusenteRotuloTest`).
+  - A nota vem no idioma da requisição (`HSTS ausente: -10` / `HSTS missing: -10`). Afirme
+    pelo `id` da issue e, na nota, no máximo que contém `-10`.
+  - Cache de scan por host: o primeiro scan vale até reiniciar o `backend`.

@@ -4,8 +4,8 @@ Consolida os 26 casos originais do escopo (`CyberAudit QA — Escopo do projeto 
 testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogados em
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
-Contagem atual (2026-11-10, com os casos acrescentados depois, como o SSRF-07 e o
-SCAN-05 a SCAN-07): 45 casos — 21 P0, 21 P1, 3 P2.
+Contagem atual (2026-11-11, com os casos acrescentados depois, como o SSRF-07 e o
+SCAN-05 a SCAN-08): 46 casos — 21 P0, 21 P1, 4 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -66,6 +66,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SCAN-05 | Motor | Alvo que só anuncia `X-Powered-By: PHP/8.3.36` (stub `php-banner-mock`): CVE de extensão em que o PHP é só plataforma | `detectedVersions.PHP` = `8.3.36` (controle); `cveFindings` sem o CVE-2013-2220; nenhuma issue `CVE_*` nem nota "CVE potencial" no score | RestAssured + WireMock | P1 | 🔲 A fazer — BUG-08 corrigido no Backend (2026-11-07, `bugs/BUG-08-cve-de-extensao-como-cve-do-php.md`); contrato e armadilhas no HANDOFF §11 |
 | SCAN-06 | Motor | DKIM por provedor: domínio com SPF da Hostinger e seletores `hostingermail-a` (chave) + `-b`/`-c` revogados (`p=` vazio); domínio só com revogados; domínio com TXT curinga `v=spf1` | 1º: `dnsSecurityResult.dkimHintFound` true e `dkimSelector` `hostingermail-a`; 2º e 3º: `NOT_DETECTED` | RestAssured + DNS falso | P2 | 🔲 A fazer — BUG-09 corrigido no Backend (2026-11-09, `bugs/BUG-09-dkim-hostinger-e-chave-revogada.md`); desbloqueado: DNS falso no ambiente (`env/coredns/`), alvos `dkim-hostinger`, `dkim-revogado` e `dkim-curinga` `.dns-mock.test`; contrato no HANDOFF §11, Etapa C |
 | SCAN-07 | Motor | Risco de email spoofing pelo DNS falso: SPF `~all` + DMARC `p=quarantine`; quarantine com `pct=50`; `reject` com `pct=25`; SPF `+all` + `p=reject`; `p=none` | `dnsSecurityResult.emailSpoofingRisk`: LOW, MEDIUM, LOW, HIGH, MEDIUM; nota de spoofing em `score.notes` só nos MEDIUM/HIGH (-6, -12, -6) — os dois LOW sem nota nem issue `DNS_EMAIL_SPOOFING` | RestAssured + DNS falso | P1 | 🔲 A fazer — BUG-10 corrigido no Backend (2026-11-10, `bugs/BUG-10-spoofing-exigia-hardfail-e-ignorava-mais-all.md`); contrato no HANDOFF §11, Etapa C |
+| SCAN-08 | Motor | Alvo sem `Strict-Transport-Security` (stub `sem-hsts-mock`) | `HSTS_MISSING` em `score.issues` com `severity` MEDIUM; nota `HSTS ausente: -10` em `score.notes` | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-11 corrigido no Backend (2026-11-11, `bugs/BUG-11-hsts-ausente-rotulado-high.md`); contrato no HANDOFF §11, Etapa D |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
 ## Relatório e interface
@@ -445,3 +446,12 @@ anula o DMARC) saía MEDIUM. Fix no Backend com regressão lá
 (`bugs/BUG-10-spoofing-exigia-hardfail-e-ignorava-mais-all.md`). Infra nova: CoreDNS no
 compose com a zona `dns-mock.test` (`env/coredns/`), que desbloqueia o SCAN-06. Caso novo
 SCAN-07 (P1, 🔲).
+
+## 2026-11-11 — BUG-11 corrigido (HSTS ausente rotulado HIGH); SCAN-08 novo
+
+Etapa D do feedback de cliente (HANDOFF §11). `HSTS_MISSING` saía HIGH e o rótulo acionava o
+piso de risco do score: site sem outro achado, nota 90, saía "risco médio". Agora MEDIUM,
+com os mesmos -10; as recomendações de HSTS ausente e fraco passam a dar a mesma meta (1 ano)
+e o mesmo piso (30 dias). Fix no Backend com regressão lá
+(`bugs/BUG-11-hsts-ausente-rotulado-high.md`). Caso novo SCAN-08 (P2, 🔲) com stub próprio no
+WireMock (`sem-hsts-mock`, alias novo no compose).
