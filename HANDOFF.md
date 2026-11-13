@@ -618,6 +618,7 @@ Nenhum caso da matriz está mais em 🐛. Próximo passo: a fila do dono abaixo.
 - **SCAN-06** (BUG-09) — desbloqueado pelo DNS falso; contrato na §11, Etapa C.
 - **SCAN-07** (BUG-10) — contrato e armadilhas na §11, Etapa C.
 - **SCAN-08** (BUG-11) — contrato e armadilhas na §11, Etapa D.
+- **SCAN-09** (BUG-12) — contrato e armadilhas na §11, Etapa E.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -637,7 +638,8 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
   risco); textos de recomendação alinhados (31536000 x 2592000). ✅ BUG-11.
 - **E** — Cookies: atributos lidos de verdade (hoje `contains("secure")` no Set-Cookie
   inteiro); cookie de CSRF sem exigir HttpOnly; `connect.sid` como sessão; severidade do
-  agregado = a do pior cookie; cookie que não é de sessão → LOW sem desconto.
+  agregado = a do pior cookie; cookie que não é de sessão → LOW sem desconto. ✅ BUG-12
+  (+ BUG-13 lateral, aberto).
 - **F** — Pesos por severidade: LOW custa no máximo 2 (versão exposta, robots.txt,
   security.txt, Referrer/Permissions ausentes, sem WAF); robots.txt sem desconto quando
   tudo responde 401/403. Muda a nota de todo scan.
@@ -764,4 +766,41 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
     Backend (`HstsAusenteRotuloTest`).
   - A nota vem no idioma da requisição (`HSTS ausente: -10` / `HSTS missing: -10`). Afirme
     pelo `id` da issue e, na nota, no máximo que contém `-10`.
+  - Cache de scan por host: o primeiro scan vale até reiniciar o `backend`.
+
+### Etapa E — BUG-12 ✅ corrigido (cookies) — 2026-11-12
+- **Achado:** flag lida por substring do Set-Cookie inteiro (`secure_pref` saía Secure;
+  `samesite = Lax` e valor inválido saíam `UNKNOWN`, sem problema); `XSRF-TOKEN`/`csrftoken`
+  como sessão por conter "token"/"csrf" (todo Laravel padrão perdia -10 por falta de HttpOnly,
+  que nesse cookie é proposital); `connect.sid`/`sid` não eram sessão; cookie que não é de
+  sessão custava -5; `INSECURE_COOKIES` sempre MEDIUM, até com o -10 de HIGH.
+- **Fix:** parser de atributos (RFC 6265 §5.2); tipo do cookie (CSRF antes de sessão; família
+  `sid`); só sessão custa ponto — o resto é LOW, listado sem desconto; CSRF não exige HttpOnly;
+  agregado com a severidade do pior e o título contando só os que custam. Regressão:
+  `CookieAtributosTest` (19; 14 vermelhos rodando contra o código antigo). Suíte do Backend:
+  757 verdes.
+- **Decisão a rever pelo dono:** o agregado HIGH passa a acionar o piso de risco (MEDIUM). O
+  cliente (sessão PHP sem HttpOnly) sai risco MEDIUM mesmo com nota alta. Alternativa no BUG-12.
+- **Lateral:** BUG-13 (compliance "Cookies sem SameSite" nunca dispara) — aberto, fora deste
+  commit.
+- **Infra nova (Claude):** stub `env/wiremock/mappings/cookies.json` e alias `cookies-mock` no
+  WireMock + na `SSRF_TEST_ALLOWLIST` do `backend`. Recriar `wiremock` e `backend`.
+- **Contrato do SCAN-09:** qa-pro, `GET /scan?url=http://cookies-mock:8080` (passivo) → 200.
+  Em `cookieIssues` (por `name`): `PHPSESSID` `risk` HIGH; `connect.sid` HIGH; `secure_pref` LOW
+  com `secure` false; `visitante` LOW; nenhum item `XSRF-TOKEN`. Em `score.issues`,
+  `INSECURE_COOKIES` com `severity` HIGH; nota de cookies com `-10`. Antes do fix: `XSRF-TOKEN`
+  HIGH, `secure_pref` MEDIUM com `secure` true, `visitante` e `connect.sid` MEDIUM,
+  `INSECURE_COOKIES` MEDIUM.
+  **Ao vivo (8081, 2026-11-12): confirmado nos dois lados** — na imagem da etapa D saiu
+  exatamente o "antes"; depois do rebuild, exatamente o contrato (`INSECURE_COOKIES` HIGH,
+  "2 cookie(s)", nota -10). Suíte RestAssured: 44 / 0 falhas / 2 skipped.
+  Depois de reiniciar o Docker, `juice-shop` e `backend-noallowlist` não voltam sozinhos
+  (`up -d --no-build juice-shop backend-noallowlist`): sem o `juice-shop` o nome não resolve,
+  o guard não tem IP para bloquear e o SSRF-06 `[1]` cai com 200 em vez de 403.
+- **Armadilhas:**
+  - Procure cada cookie pelo `name`, não pela posição: a ordem da lista segue a dos headers,
+    que não é contrato.
+  - O título traz a contagem no idioma da requisição ("2 cookie(s) com problemas de
+    segurança"); afirme a `severity` e o `id`, não o texto.
+  - Não afirme `riskLevel` nem `score.score`: o alvo não tem HTTPS válido.
   - Cache de scan por host: o primeiro scan vale até reiniciar o `backend`.
