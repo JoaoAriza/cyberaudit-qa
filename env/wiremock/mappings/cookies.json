@@ -1,0 +1,27 @@
+{
+  "request": {
+    "method": "ANY",
+    "url": "/",
+    "headers": {
+      "Host": { "matches": "cookies-mock(:[0-9]+)?" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "Set-Cookie": [
+        "PHPSESSID=qa-sessao; Path=/; Secure",
+        "XSRF-TOKEN=qa-csrf; Path=/; Secure; SameSite=Lax",
+        "secure_pref=1; Path=/",
+        "visitante=1; Path=/",
+        "connect.sid=s%3Aqa-express; Path=/; HttpOnly; SameSite=Lax"
+      ]
+    },
+    "body": "<!doctype html><html><head><title>cookies-mock</title></head><body><p>Alvo de teste: cinco Set-Cookie, um para cada regra da analise de cookies.</p></body></html>"
+  },
+  "metadata": {
+    "caso": "SCAN-09",
+    "nota": "Responde so para o Host cookies-mock (network alias do WireMock), so na raiz, em qualquer metodo. Esperado depois do BUG-12: PHPSESSID HIGH (sem HttpOnly e SameSite); XSRF-TOKEN fora da lista (CSRF nao precisa de HttpOnly); secure_pref LOW com secure=false (o nome nao vira flag); visitante LOW (nao e sessao); connect.sid HIGH (sessao do Express, sem Secure). Achado INSECURE_COOKIES HIGH, '2 cookie(s)', nota -10. Host proprio = chave de cache de scan propria."
+  }
+}

@@ -74,9 +74,10 @@ services:
       # de cache de scan diferente → sem colisão com o AUTHZ-01 (que escaneia wiremock).
       # php-banner-mock: outro alias do WireMock, só anuncia PHP 8.3.36 (SCAN-05/BUG-08).
       # sem-hsts-mock: alias do WireMock que não manda HSTS (SCAN-08/BUG-11).
+      # cookies-mock: alias do WireMock com cinco Set-Cookie (SCAN-09/BUG-12).
       # *.dns-mock.test: alvos do DNS falso (SCAN-06/BUG-09, SCAN-07/BUG-10) — ver o
       # serviço coredns abaixo. A allowlist é por nome exato, por isso a lista inteira.
-      SSRF_TEST_ALLOWLIST: juice-shop,wiremock,redirect-mock,php-banner-mock,sem-hsts-mock,dkim-hostinger.dns-mock.test,dkim-revogado.dns-mock.test,dkim-curinga.dns-mock.test,quarantine.dns-mock.test,quarantine-pct50.dns-mock.test,reject-pct25.dns-mock.test,spf-mais-all.dns-mock.test,dmarc-none.dns-mock.test
+      SSRF_TEST_ALLOWLIST: juice-shop,wiremock,redirect-mock,php-banner-mock,sem-hsts-mock,cookies-mock,dkim-hostinger.dns-mock.test,dkim-revogado.dns-mock.test,dkim-curinga.dns-mock.test,quarantine.dns-mock.test,quarantine-pct50.dns-mock.test,reject-pct25.dns-mock.test,spf-mais-all.dns-mock.test,dmarc-none.dns-mock.test
       # DNS falso: o módulo de DNS (dnsjava) pergunta SPF/DMARC/MX/DKIM ao CoreDNS em
       # vez do DNS do Docker. dns.server é lido pelo dnsjava; o resto da JVM (HTTP,
       # SsrfGuard) segue no DNS do Docker. JAVA_TOOL_OPTIONS soma ao JAVA_OPTS da
@@ -201,6 +202,7 @@ services:
     # "wiremock" — evita colidir com o scan de wiremock do AUTHZ-01).
     # "php-banner-mock": o SCAN-05 (BUG-08) — o stub php-banner.json casa pelo Host.
     # "sem-hsts-mock": o SCAN-08 (BUG-11) — stub sem-hsts.json, página sem HSTS.
+    # "cookies-mock": o SCAN-09 (BUG-12) — stub cookies.json, cinco Set-Cookie.
     # *.dns-mock.test: os alvos do DNS falso (SCAN-06, SCAN-07). O alias dá o A (o
     # HTTP do scan cai aqui, stub dns-mock.json); os registros de email vêm do coredns.
     networks:
@@ -209,6 +211,7 @@ services:
           - redirect-mock
           - php-banner-mock
           - sem-hsts-mock
+          - cookies-mock
           - dkim-hostinger.dns-mock.test
           - dkim-revogado.dns-mock.test
           - dkim-curinga.dns-mock.test
