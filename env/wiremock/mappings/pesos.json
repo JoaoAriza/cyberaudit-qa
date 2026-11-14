@@ -1,0 +1,64 @@
+{
+  "mappings": [
+    {
+      "request": {
+        "method": "ANY",
+        "url": "/",
+        "headers": {
+          "Host": { "matches": "pesos-mock(:[0-9]+)?" }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "text/html; charset=utf-8",
+          "Server": "QaHttpd/1.2.3",
+          "X-Frame-Options": "DENY",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Security-Policy": "default-src 'self'"
+        },
+        "body": "<!doctype html><html><head><title>pesos-mock</title></head><body><p>Alvo de teste: so achados LOW de higiene.</p></body></html>"
+      },
+      "metadata": {
+        "caso": "SCAN-10",
+        "nota": "Responde so para o Host pesos-mock (network alias do WireMock). Raiz em qualquer metodo: Server com versao (QaHttpd/1.2.3, servidor ficticio: conta como versao exposta sem puxar CVE de produto real), X-Frame-Options, X-Content-Type-Options e CSP presentes, sem Referrer-Policy e sem Permissions-Policy. Sem security.txt e sem WAF (caem no 404 padrao do WireMock). Esperado depois do BUG-14: versao -2, robots.txt -2, Referrer-Policy -1, Permissions-Policy -1, security.txt -1, sem WAF -1. Host proprio = chave de cache de scan propria."
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/robots.txt",
+        "headers": {
+          "Host": { "matches": "pesos-mock(:[0-9]+)?" }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "text/plain; charset=utf-8" },
+        "body": "User-agent: *\nDisallow: /admin/\n"
+      },
+      "metadata": {
+        "caso": "SCAN-10",
+        "nota": "Um caminho sensivel no Disallow. O /admin/ responde 403 (stub abaixo) e a sonda de controle cai no 404 padrao: o caminho conta como existente."
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/admin/",
+        "headers": {
+          "Host": { "matches": "pesos-mock(:[0-9]+)?" }
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": { "Content-Type": "text/html; charset=utf-8" },
+        "body": "<!doctype html><html><body><p>403 - area protegida</p></body></html>"
+      },
+      "metadata": {
+        "caso": "SCAN-10",
+        "nota": "Area protegida por 403. Decisao do BUG-14: custa -2 igual a um 200 ou 302 para a tela de login - a protecao e a mesma e o que o Disallow revelou tambem."
+      }
+    }
+  ]
+}
