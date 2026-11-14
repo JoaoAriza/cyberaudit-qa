@@ -619,6 +619,7 @@ Nenhum caso da matriz está mais em 🐛. Próximo passo: a fila do dono abaixo.
 - **SCAN-07** (BUG-10) — contrato e armadilhas na §11, Etapa C.
 - **SCAN-08** (BUG-11) — contrato e armadilhas na §11, Etapa D.
 - **SCAN-09** (BUG-12) — contrato e armadilhas na §11, Etapa E.
+- **SCAN-10** (BUG-14) — contrato e armadilhas na §11, Etapa F.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -641,8 +642,8 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
   agregado = a do pior cookie; cookie que não é de sessão → LOW sem desconto. ✅ BUG-12
   (+ BUG-13 lateral, aberto).
 - **F** — Pesos por severidade: LOW custa no máximo 2 (versão exposta, robots.txt,
-  security.txt, Referrer/Permissions ausentes, sem WAF); robots.txt sem desconto quando
-  tudo responde 401/403. Muda a nota de todo scan.
+  security.txt, Referrer/Permissions ausentes, sem WAF). Muda a nota de todo scan. ✅ BUG-14
+  (o "robots.txt sem desconto quando tudo responde 401/403" foi retirado — ver a Etapa F).
 - **G** — Cosméticos: "null" no bônus de WAF; porta 80 INFO quando redireciona; hosts
   relacionados no idioma do laudo (pool próprio sem `IdiomaThreads`).
 
@@ -803,4 +804,45 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
   - O título traz a contagem no idioma da requisição ("2 cookie(s) com problemas de
     segurança"); afirme a `severity` e o `id`, não o texto.
   - Não afirme `riskLevel` nem `score.score`: o alvo não tem HTTPS válido.
+  - Cache de scan por host: o primeiro scan vale até reiniciar o `backend`.
+
+### Etapa F — BUG-14 ✅ corrigido (peso do LOW) — 2026-11-13
+- **Achado:** achado LOW custava de 3 a 5 — versão exposta, robots.txt e Referrer-Policy
+  ausente tiravam 5, o mesmo que X-Frame-Options ausente (MEDIUM). No primeiro laudo do
+  cliente, três itens de higiene somavam -13, mais que o cookie de sessão sem HttpOnly.
+- **Fix:** nenhum LOW passa de 2. -2 para o LOW que entrega informação (versão exposta,
+  robots.txt, TRACE/método atrás de auth, UI de docs de API); -1 para boa prática ausente
+  (security.txt, Permissions-Policy, Referrer-Policy, sem WAF). Referrer-Policy ausente desceu
+  mais porque o navegador atual já aplica `strict-origin-when-cross-origin` sem o header — o
+  texto de impacto, que dizia "URLs internas podem vazar", foi reescrito. As notas do
+  catálogo (pt e en) trazem o número novo. Regressão: `PesoLowTest` (21; 19 vermelhos contra
+  o código antigo). Suíte do Backend: 778 verdes.
+- **Retirado da proposta:** o robots.txt com tudo em 401/403 não zera. A sonda não segue
+  redirect: tela de login responde 302 (ou 200), Basic auth responde 401 — mesma proteção,
+  mesmo "/admin existe" revelado. Fica -2 para todos.
+- **Laudos do cliente refeitos com A–F:** primeiro laudo 60 → 74 (risco MEDIUM, pelo cookie
+  HIGH da etapa E); laudo depois da correção 86 → 97 (SECURE).
+- **Alavanca que ficou com o dono:** o bônus de WAF segue até +8 — com "sem WAF" a -1, ter
+  ou não WAF vale até 9 pontos, mais que qualquer LOW. Se 97 parecer generoso, é aqui. E o
+  resto da escada (MEDIUM acima de 6, HIGH abaixo de 10) ficou como está; lista no BUG-14.
+- **Infra nova (Claude):** stub `env/wiremock/mappings/pesos.json` (raiz, `/robots.txt` e
+  `/admin/`) e alias `pesos-mock` no WireMock + na `SSRF_TEST_ALLOWLIST` do `backend`.
+  Recriar `wiremock` e `backend`.
+- **Contrato do SCAN-10:** qa-pro, `GET /scan?url=http://pesos-mock:8080` (passivo,
+  `Accept-Language: pt-BR`) → 200. Em `score.notes`: "Versão de software exposta
+  (Server/X-Powered-By): -2", "Paths sensíveis em robots.txt: -2", "Referrer-Policy ausente:
+  -1", "Permissions-Policy ausente: -1", "security.txt ausente: -1". Em `score.issues`,
+  `SERVER_VERSION_EXPOSED`, `SENSITIVE_ROBOTS_PATHS`, `REFERRER_POLICY_MISSING`,
+  `PERMISSIONS_POLICY_MISSING` e `SECURITY_TXT_MISSING` com `severity` LOW. Antes do fix: -5,
+  -5, -5, -3, -3.
+  **Ao vivo (8081, 2026-11-13): confirmado nos dois lados**, em pt e en (nota 34 → 48).
+  Suíte RestAssured: 44 / 0 falhas / 2 skipped.
+- **Armadilhas:**
+  - As notas são texto no idioma da requisição, sem `id`: fixe o `Accept-Language` e
+    procure cada nota pelo começo, afirmando o final (`: -2`). Os achados, ao contrário,
+    afirme pelo `id`.
+  - "Sem WAF" não aparece: a detecção de WAF não roda no scan passivo (está na nota de
+    escopo passivo). O -1 dele fica coberto pelo teste do Backend.
+  - Não afirme `riskLevel` nem `score.score`: o alvo não tem HTTPS válido (-35) nem HSTS
+    (-10), e esses descontos não são do caso.
   - Cache de scan por host: o primeiro scan vale até reiniciar o `backend`.

@@ -4,8 +4,8 @@ Consolida os 26 casos originais do escopo (`CyberAudit QA — Escopo do projeto 
 testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogados em
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
-Contagem atual (2026-11-12, com os casos acrescentados depois, como o SSRF-07 e o
-SCAN-05 a SCAN-09): 47 casos — 21 P0, 22 P1, 4 P2.
+Contagem atual (2026-11-13, com os casos acrescentados depois, como o SSRF-07 e o
+SCAN-05 a SCAN-10): 48 casos — 21 P0, 22 P1, 5 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -68,6 +68,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SCAN-07 | Motor | Risco de email spoofing pelo DNS falso: SPF `~all` + DMARC `p=quarantine`; quarantine com `pct=50`; `reject` com `pct=25`; SPF `+all` + `p=reject`; `p=none` | `dnsSecurityResult.emailSpoofingRisk`: LOW, MEDIUM, LOW, HIGH, MEDIUM; nota de spoofing em `score.notes` só nos MEDIUM/HIGH (-6, -12, -6) — os dois LOW sem nota nem issue `DNS_EMAIL_SPOOFING` | RestAssured + DNS falso | P1 | 🔲 A fazer — BUG-10 corrigido no Backend (2026-11-10, `bugs/BUG-10-spoofing-exigia-hardfail-e-ignorava-mais-all.md`); contrato no HANDOFF §11, Etapa C |
 | SCAN-08 | Motor | Alvo sem `Strict-Transport-Security` (stub `sem-hsts-mock`) | `HSTS_MISSING` em `score.issues` com `severity` MEDIUM; nota `HSTS ausente: -10` em `score.notes` | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-11 corrigido no Backend (2026-11-11, `bugs/BUG-11-hsts-ausente-rotulado-high.md`); contrato no HANDOFF §11, Etapa D |
 | SCAN-09 | Motor | Alvo com cinco Set-Cookie (stub `cookies-mock`): sessão PHP sem HttpOnly, `XSRF-TOKEN` sem HttpOnly, `secure_pref` sem flag, `visitante` sem flag, `connect.sid` sem Secure | Em `cookieIssues`: `PHPSESSID` e `connect.sid` HIGH; `secure_pref` LOW com `secure:false`; `visitante` LOW; nenhum `XSRF-TOKEN`. Em `score.issues`, `INSECURE_COOKIES` com `severity` HIGH | RestAssured + WireMock | P1 | 🔲 A fazer — BUG-12 corrigido no Backend (2026-11-12, `bugs/BUG-12-cookies-atributo-por-substring.md`); contrato no HANDOFF §11, Etapa E |
+| SCAN-10 | Pontuação | Alvo só com achados LOW de higiene (stub `pesos-mock`): versão no `Server`, sem Referrer-Policy, sem Permissions-Policy, `/admin/` no robots.txt respondendo 403, sem security.txt | Em `score.notes`: versão exposta e robots.txt `-2`; Referrer-Policy, Permissions-Policy e security.txt `-1`. Os cinco achados em `score.issues` com `severity` LOW | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-14 corrigido no Backend (2026-11-13, `bugs/BUG-14-peso-low-igual-a-medium.md`); contrato no HANDOFF §11, Etapa F |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
 ## Relatório e interface
@@ -466,3 +467,12 @@ de sessão e rotulava o agregado sempre MEDIUM. Fix no Backend com regressão l�
 (`bugs/BUG-12-cookies-atributo-por-substring.md`). Caso novo SCAN-09 (P1, 🔲) com stub próprio
 no WireMock (`cookies-mock`). Achado lateral registrado e não corrigido: BUG-13 (item de
 SameSite do compliance nunca dispara).
+
+## 2026-11-13 — BUG-14 corrigido (peso do LOW); SCAN-10 novo
+
+Etapa F do feedback de cliente (HANDOFF §11). Achado LOW custava de 3 a 5 pontos, o mesmo que
+um MEDIUM. Agora nenhum LOW passa de 2: -2 para o que entrega informação (versão exposta,
+robots.txt, TRACE, UI de docs de API), -1 para boa prática ausente (security.txt,
+Permissions-Policy, Referrer-Policy, WAF). Fix no Backend com regressão lá
+(`bugs/BUG-14-peso-low-igual-a-medium.md`). Caso novo SCAN-10 (P2, 🔲) com stub próprio no
+WireMock (`pesos-mock`).
