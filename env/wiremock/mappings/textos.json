@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "ANY",
+    "url": "/",
+    "headers": {
+      "Host": { "matches": "textos-mock(:[0-9]+)?" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "Strict-Transport-Security": "max-age=0"
+    },
+    "body": "<!doctype html><html><head><title>textos-mock</title></head><body><p>Alvo de teste: HSTS com max-age=0.</p></body></html>"
+  },
+  "metadata": {
+    "caso": "SCAN-11",
+    "nota": "Responde so para o Host textos-mock (network alias do WireMock), so na raiz, em qualquer metodo. Manda Strict-Transport-Security: max-age=0, que apaga o HSTS gravado no navegador. Esperado depois do BUG-15: o status do header sai 'WEAK (max-age=0 apaga o HSTS)' com Accept-Language pt-BR e 'WEAK (max-age=0 deletes HSTS)' com en; antes saia em ingles nos dois. Host proprio = chave de cache de scan propria."
+  }
+}
