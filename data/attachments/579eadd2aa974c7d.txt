@@ -1,1 +1,0 @@
-{"message":"Scan ativo requer autenticação. Faça login ou solicite um convite.","error":"401 UNAUTHORIZED"}
