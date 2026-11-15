@@ -4,8 +4,8 @@ Consolida os 26 casos originais do escopo (`CyberAudit QA — Escopo do projeto 
 testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogados em
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
-Contagem atual (2026-11-13, com os casos acrescentados depois, como o SSRF-07 e o
-SCAN-05 a SCAN-10): 48 casos — 21 P0, 22 P1, 5 P2.
+Contagem atual (2026-11-14, com os casos acrescentados depois, como o SSRF-07, o
+SCAN-05 a SCAN-11 e o UI-04): 50 casos — 21 P0, 22 P1, 7 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -69,6 +69,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SCAN-08 | Motor | Alvo sem `Strict-Transport-Security` (stub `sem-hsts-mock`) | `HSTS_MISSING` em `score.issues` com `severity` MEDIUM; nota `HSTS ausente: -10` em `score.notes` | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-11 corrigido no Backend (2026-11-11, `bugs/BUG-11-hsts-ausente-rotulado-high.md`); contrato no HANDOFF §11, Etapa D |
 | SCAN-09 | Motor | Alvo com cinco Set-Cookie (stub `cookies-mock`): sessão PHP sem HttpOnly, `XSRF-TOKEN` sem HttpOnly, `secure_pref` sem flag, `visitante` sem flag, `connect.sid` sem Secure | Em `cookieIssues`: `PHPSESSID` e `connect.sid` HIGH; `secure_pref` LOW com `secure:false`; `visitante` LOW; nenhum `XSRF-TOKEN`. Em `score.issues`, `INSECURE_COOKIES` com `severity` HIGH | RestAssured + WireMock | P1 | 🔲 A fazer — BUG-12 corrigido no Backend (2026-11-12, `bugs/BUG-12-cookies-atributo-por-substring.md`); contrato no HANDOFF §11, Etapa E |
 | SCAN-10 | Pontuação | Alvo só com achados LOW de higiene (stub `pesos-mock`): versão no `Server`, sem Referrer-Policy, sem Permissions-Policy, `/admin/` no robots.txt respondendo 403, sem security.txt | Em `score.notes`: versão exposta e robots.txt `-2`; Referrer-Policy, Permissions-Policy e security.txt `-1`. Os cinco achados em `score.issues` com `severity` LOW | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-14 corrigido no Backend (2026-11-13, `bugs/BUG-14-peso-low-igual-a-medium.md`); contrato no HANDOFF §11, Etapa F |
+| SCAN-11 | Motor | Alvo com `Strict-Transport-Security: max-age=0` (stub `textos-mock`), scan em pt-BR e em en | `headers["Strict-Transport-Security"]` = `WEAK (max-age=0 apaga o HSTS)` em pt-BR e `WEAK (max-age=0 deletes HSTS)` em en | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-15 corrigido no Backend (2026-11-14, `bugs/BUG-15-textos-do-laudo.md`); contrato no HANDOFF §11, Etapa G |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
 ## Relatório e interface
@@ -80,6 +81,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | UI-01 | Interface | Login completo com 2FA | Chega ao dashboard | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress ✅ (2026-10-21; login + TOTP via cy.task → dashboard); Selenium pendente |
 | UI-02 | Interface | Iniciar scan, acompanhar e ver no histórico | Resultado e nota exibidos | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress ✅ (2026-10-22; scan → nota /100 → histórico, bypass via localStorage); Selenium pendente |
 | UI-03 | Interface | Criar, editar e remover agendamento recorrente | Alterações persistem após recarregar | Cypress | P2 | ✅ Passou — Cypress (2026-10-23; criar → pausar → persistir no reload → remover; host único idempotente) |
+| UI-04 | Interface | Scan passivo de `quarantine-pct50.dns-mock.test` (DMARC `p=quarantine; pct=50` no DNS falso) e abrir o módulo Reconnaissance | Card DMARC mostra `p=quarantine; pct=50` — a política do registro, não o nível | Cypress | P2 | 🔲 A fazer — BUG-15 corrigido no Frontend (2026-11-14, `bugs/BUG-15-textos-do-laudo.md`); contrato no HANDOFF §11, Etapa G |
 
 ## Pagamento (checkout transparente — Pix + cartão)
 
@@ -476,3 +478,12 @@ robots.txt, TRACE, UI de docs de API), -1 para boa prática ausente (security.tx
 Permissions-Policy, Referrer-Policy, WAF). Fix no Backend com regressão lá
 (`bugs/BUG-14-peso-low-igual-a-medium.md`). Caso novo SCAN-10 (P2, 🔲) com stub próprio no
 WireMock (`pesos-mock`).
+
+## 2026-11-14 — BUG-15 corrigido (textos do laudo); SCAN-11 e UI-04 novos
+
+Etapa G do feedback de cliente (HANDOFF §11), a última. Cinco textos errados sem mudar a
+nota: "null" no bônus de WAF, porta 80 LOW quando só redireciona, módulos no idioma do
+servidor (pool sem `IdiomaThreads`), HSTS `max-age=0` em inglês fixo e o card DMARC com o
+nível no lugar da política ("p=medium"). Fix no Backend e no Frontend com regressão lá
+(`bugs/BUG-15-textos-do-laudo.md`). Casos novos SCAN-11 (P2, 🔲, stub `textos-mock`) e
+UI-04 (P2, 🔲, alvo do DNS falso).

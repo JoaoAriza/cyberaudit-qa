@@ -620,6 +620,7 @@ Nenhum caso da matriz está mais em 🐛. Próximo passo: a fila do dono abaixo.
 - **SCAN-08** (BUG-11) — contrato e armadilhas na §11, Etapa D.
 - **SCAN-09** (BUG-12) — contrato e armadilhas na §11, Etapa E.
 - **SCAN-10** (BUG-14) — contrato e armadilhas na §11, Etapa F.
+- **SCAN-11** e **UI-04** (BUG-15) — contrato e armadilhas na §11, Etapa G.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -645,7 +646,11 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
   security.txt, Referrer/Permissions ausentes, sem WAF). Muda a nota de todo scan. ✅ BUG-14
   (o "robots.txt sem desconto quando tudo responde 401/403" foi retirado — ver a Etapa F).
 - **G** — Cosméticos: "null" no bônus de WAF; porta 80 INFO quando redireciona; hosts
-  relacionados no idioma do laudo (pool próprio sem `IdiomaThreads`).
+  relacionados no idioma do laudo (pool próprio sem `IdiomaThreads`). ✅ BUG-15 (+ HSTS
+  `max-age=0` fora do catálogo e card DMARC com `p=medium`, achados na mesma revisão).
+
+**As 7 etapas fecharam em 2026-11-14.** A fila volta para os casos do dono (§10); os casos
+novos desta rodada estão nela.
 
 ### Etapa A — BUG-08 ✅ corrigido (CVE de extensão como CVE do PHP) — 2026-11-07
 - **Achado:** o NVD registra "extensão X do PHP" como um AND — a extensão com
@@ -846,3 +851,41 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
   - Não afirme `riskLevel` nem `score.score`: o alvo não tem HTTPS válido (-35) nem HSTS
     (-10), e esses descontos não são do caso.
   - Cache de scan por host: o primeiro scan vale até reiniciar o `backend`.
+
+### Etapa G — BUG-15 ✅ corrigido (textos do laudo) — 2026-11-14
+- **Achado:** cinco textos errados, sem mudar a nota: "WAF detectado (null, probe
+  bloqueado)" quando o WAF é achado só pelo bloqueio; porta 80 LOW com "HTTP exposto" quando
+  ela só redireciona (a sonda não lia o `Location`); hosts relacionados no idioma do servidor
+  ("max-age far too short: 86,400s" num laudo em português — pool sem `IdiomaThreads`, e o
+  takeover tinha o mesmo); HSTS `max-age=0` em inglês fixo no código; card DMARC com
+  "p=medium" (o nível, não a política).
+- **Fix:** Backend — fallback "provedor não identificado"; porta HTTP com 30x para
+  `https://` vira INFO com texto próprio; três pools com a fábrica de idioma; `max-age=0` no
+  catálogo. Frontend — `politicaDmarc()` lê o `p=` (e o `pct=` < 100) do registro.
+  Regressão: `TextosDoLaudoTest` (9, com guarda que varre `src/main/java` atrás de pool sem
+  idioma) e `dmarc.test.ts` (6). Suítes: Backend 787, Vitest 31, build ok.
+- **Infra nova (Claude):** stub `env/wiremock/mappings/textos.json` e alias `textos-mock` no
+  WireMock + na `SSRF_TEST_ALLOWLIST` do `backend`. Recriar `wiremock` e `backend`; para o
+  UI-04, rebuild do `frontend` (`up -d --build frontend`).
+- **Contrato do SCAN-11:** qa-pro, `GET /scan?url=http://textos-mock:8080` (passivo) → 200.
+  Com `Accept-Language: pt-BR`, `headers["Strict-Transport-Security"]` =
+  `WEAK (max-age=0 apaga o HSTS)`; com `en`, `WEAK (max-age=0 deletes HSTS)`. Antes do fix:
+  o texto em inglês nos dois.
+- **Contrato do UI-04:** login qa-pro (2FA), scan passivo de
+  `http://quarantine-pct50.dns-mock.test:8080`, módulo Reconnaissance → card DMARC com
+  `p=quarantine; pct=50`. Antes do fix: `p=medium`.
+  **Ao vivo (2026-11-14): os dois confirmados nos dois lados** — SCAN-11 por API em pt e en,
+  UI-04 na tela (frontend 8090). Suíte RestAssured: 44 / 0 falhas / 2 skipped.
+- **Armadilhas:**
+  - SCAN-11: o idioma vem do `Accept-Language`, e o cache de scan é por host, não por idioma.
+    Para o segundo idioma, reinicie o `backend` entre os dois scans — senão volta o primeiro
+    resultado, no idioma do primeiro.
+  - SCAN-11: afirme só o valor do header; o alvo não tem HTTPS, então nota e risco não são
+    do caso.
+  - UI-04: o campo de URL pode vir preenchido (com o último alvo, por exemplo) — limpe antes
+    de digitar, ou o texto é colado no fim e o scan vai para um alvo torto.
+  - UI-04: depois de rebuildar o `frontend`, o navegador pode manter o bundle antigo em
+    cache e mostrar o "antes". No Cypress cada execução abre limpa; na mão, recarregue
+    furando o cache.
+  - UI-04: o card fica dentro do módulo Reconnaissance (abre pelo menu lateral); procure pelo
+    título "DMARC" e leia o valor logo abaixo dele.
