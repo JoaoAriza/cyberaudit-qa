@@ -1,0 +1,44 @@
+{
+  "mappings": [
+    {
+      "request": {
+        "method": "GET",
+        "urlPath": "/busca",
+        "headers": {
+          "Host": { "matches": "eco-mock(:[0-9]+)?" }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "text/html; charset=utf-8"
+        },
+        "body": "<!doctype html><html><head><title>eco-mock</title></head><body><p>Resultados para: {{{request.query.q}}}</p></body></html>"
+      },
+      "metadata": {
+        "caso": "SCAN-03 (XSS)",
+        "nota": "Ecoa o parametro q SEM escapar (o WireMock roda o Handlebars sem escape; as chaves triplas so deixam isso explicito). A sonda de XSS anexa cyberaudit<id><\"> ao primeiro parametro; aqui o < \" > volta cru logo depois do marcador -> reflectedXssSuspected true no scan ativo. Host proprio (eco-mock): a chave do cache de scan e' o host, sem o caminho."
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "urlPath": "/busca",
+        "headers": {
+          "Host": { "matches": "eco-escapado-mock(:[0-9]+)?" }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "text/html; charset=utf-8"
+        },
+        "body": "<!doctype html><html><head><title>eco-escapado-mock</title></head><body><p>Resultados para: {{replace (replace (replace request.query.q '<' '&lt;') '>' '&gt;') '\"' '&quot;'}}</p></body></html>"
+      },
+      "metadata": {
+        "caso": "SCAN-03 (XSS, controle negativo)",
+        "nota": "Mesmo eco, mas ESCAPADO: < > \" viram &lt; &gt; &quot; (helper replace; o WireMock roda o Handlebars sem escape, entao chaves duplas tambem sairiam cruas, e nao ha helper escapeHtml na 3.9.1). Prova que a sonda distingue reflexao de XSS: o marcador volta, os caracteres nao -> reflectedXssSuspected false. Host diferente do eco-mock porque o cache de scan e' por host."
+      }
+    }
+  ]
+}
