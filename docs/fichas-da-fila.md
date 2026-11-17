@@ -81,6 +81,7 @@ ele para o `TestConfig`, mas a decisão é sua.
 | 12 | SCAN-10 | P2 | `LaudoStubsTest` | Cinco notas pelo começo do texto. |
 | 13 | SCAN-06 | P2 | `DnsFalsoTest` | Igual ao SCAN-07, com outro campo. |
 | 14 | UI-04 | P2 | `ui-04-dmarc.cy.js` (nova) | O único de tela. Faça junto com a revisão do UI-02 (fim do documento). |
+| 15 | PLAN-03 | P1 | `ApiKeyRevogadaTest` ou classe própria | Entrou em 2026-11-17 (BUG-18). Pode ir logo depois do AUTH-05: mesmo endpoint. |
 
 ---
 
@@ -236,9 +237,8 @@ só vale se a **mesma** chave deu 200 antes. Sem esse controle, o teste não dis
   key com este nome.". Use timestamp ou UUID no nome.
 - Máximo de 10 chaves **ativas** por conta (passou disso → 402). Revogue tudo o que criar.
   O teste do jeito acima já faz isso.
-- **Correção do contrato antigo:** o HANDOFF dizia "qa-free não cria chave (402)". Ao
-  vivo, **cria** (201). Isso é o BUG-18, aberto, e não é deste caso: não afirme nada sobre
-  o qa-free aqui.
+- O qa-free não entra neste caso. Ele criava chave (BUG-18); depois do fix de 2026-11-17
+  leva 402, e isso é o PLAN-03 (ficha 15).
 
 **Ver o vermelho.** `base.uri.noAllowlist`: o passo 2 dá 401 (BUG-01). O controle positivo
 pega o bug.
@@ -513,6 +513,32 @@ depois de 2026-11-14).
 
 **Conferido em 2026-11-15.** Token forjado, campo limpo, scan, Reconnaissance → card
 "DMARC / p=quarantine; pct=50".
+
+---
+
+### 15. PLAN-03 (P1) · acrescentado em 2026-11-17
+
+**O que prova e por quê.** Que a API key, recurso de plano pago, não sai de graça. A trava
+antiga decidia pelo papel, e todo cadastro é OWNER da própria conta, então qualquer FREE
+passava (BUG-18).
+
+**Preparar.** Nada. Contas qa-free e qa-pro, token forjado.
+
+**Pedido e afirmar.**
+1. qa-free: `POST /api-keys` `{"name":"<único>"}` → **402**, `message` "API Keys requerem
+   plano PRO ou Empresa.".
+2. Controle: qa-pro, o mesmo pedido → **201** com `plainKey`. Depois,
+   `DELETE /api-keys/{id}` → 204. O controle prova que o 402 vem do plano, e não de "API
+   key quebrada".
+
+**Armadilhas.**
+- Nome único por execução, e revogue a chave do controle (limite de 10 ativas).
+- Conta Empresa no FREE e "chave antiga continua valendo" ficam no Backend: o seed não tem
+  conta Empresa no FREE, e a chave antiga pede mudar o plano no banco.
+
+**Ver o vermelho.** `base.uri.noAllowlist` (8099): qa-free → 201.
+
+**Conferido em 2026-11-17.** qa-free 402 com a mensagem acima; qa-pro 201 → 204.
 
 ---
 

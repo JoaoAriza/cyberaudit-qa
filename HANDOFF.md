@@ -628,6 +628,7 @@ lista divergirem, vale a ficha (§12).
 - **SCAN-09** (BUG-12) — contrato e armadilhas na §11, Etapa E.
 - **SCAN-10** (BUG-14) — contrato e armadilhas na §11, Etapa F.
 - **SCAN-11** e **UI-04** (BUG-15) — contrato e armadilhas na §11, Etapa G.
+- **PLAN-03** (BUG-18) — contrato na §12, Etapa H; ficha 15.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -930,7 +931,9 @@ está abaixo e nas fichas.
     busca do Juice Shop devolve o resultado de `/` em 9 ms, sem SQLi) e a conta (outra
     conta recebe o resultado, que não entra no histórico dela).
   - **BUG-18** (P1) — conta FREE cria API key: `checkApiKeyAccess` libera `OWNER`, e todo
-    cadastro nasce `OWNER`. A tela mostra "disponível no PRO".
+    cadastro nasce `OWNER`. ~~A tela mostra "disponível no PRO"~~ — errado: a tela tinha a
+    mesma regra e mostrava o painel liberado ao FREE (conferido em 2026-11-17).
+    ✅ corrigido, Etapa H abaixo.
 - **Revisão do código do dono:** o UI-02 (Cypress) está verde sem testar o que diz. O campo
   abre com "github.com", o `.type()` digita no fim, e o banco tem 21 scans de
   `https://github.comwiremock:8080/health`. Passa porque o host inexistente ganha nota
@@ -938,3 +941,52 @@ está abaixo e nas fichas.
   correção é do dono (ficha, fim do documento).
 - **Próximo passo:** o dono escreve os casos pela ficha. BUG-13, 16, 17 e 18 seguem abertos;
   a ordem de correção é decisão do dono.
+
+### Rodada dos achados laterais — uma etapa por bug (2026-11-17)
+O dono pediu para corrigir os laterais agora, no ritmo de sempre: um por etapa, regressão
+no Backend, conferência ao vivo, caso de QA novo na matriz, dono commita. Ordem: **H =
+BUG-18**, que não tinha decisão pendente. Depois vêm o BUG-19 (mesma área, achado na H), o
+BUG-17 e o BUG-16. O 17 e o 16 pedem decisões do dono, listadas em cada bug; o Claude
+traz uma recomendação na vez de cada um. O BUG-13 segue aberto.
+
+### Etapa H — BUG-18 ✅ corrigido (FREE criava API key) — 2026-11-17
+- **Achado corrigido na conferência:** a tela **não** mostrava "disponível no PRO" ao FREE.
+  O `canApiKeys` do Frontend tinha a mesma regra do Backend (`isAdmin()` = OWNER/ADMIN). O
+  cardápio `/billing/plans` não cita API key em plano nenhum. A trava "PRO" só existia em
+  ramos que ninguém alcançava, então a regra virou decisão do dono.
+- **Decisões do dono:** (1) criar chave é de **plano pago** — PRO, ENTERPRISE e equipe da
+  plataforma; FREE → 402, inclusive conta Empresa no FREE (o tipo se escolhe no cadastro).
+  (2) **Chave antiga continua valendo**, listável e revogável.
+- **Fix:** Backend — `checkApiKeyAccess` decide só por `effectivePlan(user)`. Frontend —
+  `src/apiKeys.ts` (`podeCriarApiKey`, `painelApiKey`); conta sem direito e com chave ativa
+  vê a lista com "Revogar", sem o formulário. Regressão:
+  - `ApiKeyPlanoIntegrationTest` (6; 3 vermelhos contra o código antigo);
+  - `apiKeys.test.ts` (9).
+
+  Suítes: Backend 787 → 793, Vitest 31 → 40, build ok. Containers `backend` e `frontend`
+  rebuildados. RestAssured do dono: 44 / 0 falhas / 2 pulados.
+- **Ao vivo:** antes, qa-free → 201 e painel liberado. Depois, qa-free → 402; qa-pro e
+  qa-enterprise → 201. No cenário da chave antiga (qa-free posto em PRO, cria, volta para
+  FREE): a chave autentica com 200, a nova leva 402 e a tela mostra só a lista com
+  "Revogar". Tudo foi restaurado: planos do seed e nenhuma chave de teste ativa.
+- **Contrato do PLAN-03 (dono escreve):** qa-free, token forjado, `POST /api-keys`
+  `{"name":"<único>"}` → **402** com `message` "API Keys requerem plano PRO ou Empresa.".
+  Controle: qa-pro, mesmo pedido → **201** com `plainKey`; depois `DELETE /api-keys/{id}` →
+  204.
+- **O que o PLAN-03 prova:** que o recurso pago não sai de graça. A trava por papel deixava
+  qualquer cadastro passar, porque todo cadastro é dono da própria conta. O controle PRO
+  prova que o 402 é do plano, e não de "API key quebrada".
+- **Armadilhas do PLAN-03:**
+  - Nome único por execução; revogar o que o controle criar (10 ativas por conta → 402 por
+    outro motivo).
+  - Não afirme sobre conta Empresa no FREE nem sobre a chave antiga: o seed não tem essa
+    conta, e a chave antiga pede mudar o plano no banco. As duas estão cobertas no Backend.
+  - Vermelho: `base.uri.noAllowlist` (8099, imagem antiga) → qa-free 201.
+- **Lateral → BUG-19** (aberto): `/api-keys/ci` roda scan sem cota diária, sem rate limit e
+  sem `checkActiveScan`. Conferido: com a cota do qa-free estourada, `/scan` dá 402 e o gate
+  dá 200 três vezes. Num ativo de FREE, o gate pula o "requer PRO" e só para na prova de
+  posse por arquivo.
+- **Infra:** o seed do PAY-15 passa a renovar as duas assinaturas a cada carga (`DO UPDATE`).
+  A AUTHORIZED vence 28 dias depois da carga; no banco local, carregado em 20/10, ela venceu hoje, o
+  PAY-10 a expirou, e o PAY-15 caiu (esperava AUTHORIZED, veio PENDING). Na CI o banco nasce
+  novo. Local: `docker compose -f env/docker-compose.test.yml up seeder`.

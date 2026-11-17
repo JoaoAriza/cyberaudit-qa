@@ -4,8 +4,8 @@ Consolida os 26 casos originais do escopo (`CyberAudit QA — Escopo do projeto 
 testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogados em
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
-Contagem atual (2026-11-14, com os casos acrescentados depois, como o SSRF-07, o
-SCAN-05 a SCAN-11 e o UI-04): 50 casos — 21 P0, 22 P1, 7 P2.
+Contagem atual (2026-11-17, com os casos acrescentados depois, como o SSRF-07, o
+SCAN-05 a SCAN-11, o UI-04 e o PLAN-03): 51 casos — 21 P0, 23 P1, 7 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -40,6 +40,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 |---|---|---|---|---|---|---|
 | PLAN-01 | Planos | Usuário Free solicita relatório PDF | Bloqueado (recurso Pro) | RestAssured, Cypress | P0 | ✅ Passou — RestAssured (2026-10-09) e Cypress (2026-10-26; Free: botão PDF desabilitado + title "Exportar PDF requer plano PRO ou superior"; controle positivo Pro habilitado) |
 | PLAN-02 | Planos | Exceder a cota de scans do plano | Bloqueado com mensagem clara | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-10) |
+| PLAN-03 | Planos | Conta FREE (dona da conta, como todo cadastro) tenta criar API key; controle com conta PRO | FREE → 402 "API Keys requerem plano PRO ou Empresa."; PRO → 201 com `plainKey` (e revogar) | RestAssured | P1 | 🔲 A fazer — BUG-18 corrigido no Backend e no Frontend (2026-11-17, `bugs/BUG-18-free-cria-api-key.md`); contrato no HANDOFF §12, Etapa H |
 | RATE-01 | Rate limit | Exceder o limite configurado por usuário/IP | 429; volta a 200 após a janela | RestAssured | P1 | ⏸️ Adiado — decisão B tomada (ver nota 2026-10-05) |
 
 ## Anti-SSRF
@@ -500,3 +501,17 @@ corrigidos:
 
 Na revisão, o UI-02 (Cypress) saiu de ✅ para ⚠️: o scan dele vai para um host torto, e o
 teste passa mesmo assim.
+
+## 2026-11-17 — BUG-18 corrigido (FREE criava API key); PLAN-03 novo; BUG-19 aberto
+
+Primeira etapa da rodada dos achados laterais (HANDOFF §12). Criar API key passa a ser de
+plano pago (PRO, ENTERPRISE e equipe da plataforma). A checagem antiga saía cedo para o
+papel OWNER, e todo cadastro é OWNER; a tela tinha a mesma regra. Chave que já existe
+continua valendo e aparece para ser revogada (decisão do dono). Fix no Backend e no
+Frontend, com regressão lá (`bugs/BUG-18-free-cria-api-key.md`). Caso novo PLAN-03 (P1, 🔲).
+
+Achado lateral registrado e não corrigido: BUG-19. O gate de CI (`/api-keys/ci`) roda o
+scan sem cota diária, sem rate limit e sem a trava de plano do scan ativo.
+
+Infra: o seed do PAY-15 passa a renovar as assinaturas a cada carga. A AUTHORIZED tinha
+vencido no banco local, 28 dias depois da primeira carga.
