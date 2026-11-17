@@ -469,7 +469,9 @@ nos comandos de commit; a fila do dono vai acumulando no fim desta seção.
   - `DELETE /api-keys/{id}` com Bearer → **204**; revogar de novo → 409 (lido no código).
   - Armadilhas (lidas no `ApiKeyService`): nome da chave é **único por conta** (repetir → 409, use nome único por run);
     máximo de **10 chaves ativas** por conta (passou disso → 402, então revogue o que criar);
-    qa-free não cria chave (FREE → 402).
+    ~~qa-free não cria chave (FREE → 402)~~ — **errado** (conferido ao vivo em 2026-11-15:
+    o qa-free cria, 201). Virou o BUG-18, aberto; ver §12. O nome de chave revogada continua
+    ocupado (repetir → 409).
 
 ### Etapa 2 — BUG-02 ✅ corrigido (SSRF: IPv4 em formato alternativo)
 - **Fix:** `SsrfGuard.rejectNonCanonicalIpv4` — host cujo último rótulo é número (regra
@@ -533,8 +535,9 @@ nos comandos de commit; a fila do dono vai acumulando no fim desta seção.
     (hoje 15 módulos) = `OK`. Leva ~6 s. Conferido ao vivo com os dois tokens.
   - `openPorts: []` é esperado: o port scan procura portas de risco conhecidas (21, 22,
     3306, 6379...) e a 3000 não está na lista. Não asserte porta aberta.
-  - O resultado fica em cache (Caffeine, memória) por URL + modo: rodar de novo devolve o
-    mesmo resultado; rebuild do container zera.
+  - O resultado fica em cache (Caffeine, memória) por **host + modo + idioma, por 2 min**
+    (corrigido em 2026-11-15; antes dizia "por URL + modo"). Caminho e query ficam fora da
+    chave: BUG-17, ver §12. Restart do container também zera.
 - **SCAN-03 continua bloqueado**, por dois motivos que não são o BUG-03:
   - SQLi → **BUG-06** (novo, P1): o probe anexa `'` (`apple'`), o Juice Shop vaza
     `SQLITE_ERROR` e o probe não reconhece (não tem padrão de SQLite do Node).
@@ -606,14 +609,18 @@ BUG-01 a BUG-07 corrigidos no Backend, cada um com regressão na suíte dele (62
 Nenhum caso da matriz está mais em 🐛. Próximo passo: a fila do dono abaixo.
 
 ### Fila do dono — depois da rodada de bugs
+**Fichas prontas em `docs/fichas-da-fila.md` (2026-11-15).** Uma por caso, na ordem
+sugerida, com cada contrato reconferido ao vivo depois das etapas A–G. Onde a ficha e esta
+lista divergirem, vale a ficha (§12).
+
 - **AUTH-05** (BUG-01) — contrato na Etapa 1.
 - **SSRF-03 hex** (BUG-02) — tirar o `@Disabled`; opcional `0177.0.0.1`. Etapa 2.
 - **SSRF-07** (BUG-05) — contrato e armadilhas na Etapa 3.
 - **SCAN-01** (BUG-03) — contrato na Etapa 4.
 - **AUTH-04** (BUG-04) — contrato e armadilhas na Etapa 6 (lib TOTP no pom, conta qa-free).
 - **SCAN-03** — produto pronto (BUG-03 + BUG-06). SQLi: `dbErrorLeakageSuspected:true` no
-  `/rest/products/search?q=apple` (Etapa 5). XSS: precisa de outro alvo; o stub do
-  WireMock que ecoa o parâmetro é infra, o Claude monta quando o dono chegar nesse caso.
+  `/rest/products/search?q=apple` (Etapa 5). XSS: stub `eco.json` montado em 2026-11-15
+  (`eco-mock` cru, `eco-escapado-mock` como controle); ver a ficha 4.
 - **SCAN-05** (BUG-08) — contrato e armadilhas na §11, Etapa A.
 - **SCAN-06** (BUG-09) — desbloqueado pelo DNS falso; contrato na §11, Etapa C.
 - **SCAN-07** (BUG-10) — contrato e armadilhas na §11, Etapa C.
@@ -877,9 +884,9 @@ novos desta rodada estão nela.
   **Ao vivo (2026-11-14): os dois confirmados nos dois lados** — SCAN-11 por API em pt e en,
   UI-04 na tela (frontend 8090). Suíte RestAssured: 44 / 0 falhas / 2 skipped.
 - **Armadilhas:**
-  - SCAN-11: o idioma vem do `Accept-Language`, e o cache de scan é por host, não por idioma.
-    Para o segundo idioma, reinicie o `backend` entre os dois scans — senão volta o primeiro
-    resultado, no idioma do primeiro.
+  - SCAN-11: o idioma vem do `Accept-Language`. ~~Reinicie o `backend` entre os dois
+    idiomas~~ — **errado** (conferido em 2026-11-15): o idioma faz parte da chave do cache,
+    e en → pt-BR → en sem restart sai cada um no seu idioma.
   - SCAN-11: afirme só o valor do header; o alvo não tem HTTPS, então nota e risco não são
     do caso.
   - UI-04: o campo de URL pode vir preenchido (com o último alvo, por exemplo) — limpe antes
@@ -889,3 +896,45 @@ novos desta rodada estão nela.
     furando o cache.
   - UI-04: o card fica dentro do módulo Reconnaissance (abre pelo menu lateral); procure pelo
     título "DMARC" e leia o valor logo abaixo dele.
+
+## 12. Fichas da fila e achados laterais (2026-11-15)
+
+O dono pediu as fichas da fila (§10) antes de escrever os casos. Saiu
+`docs/fichas-da-fila.md`: uma ficha por caso (o que prova e por quê, preparar, pedido,
+afirmar, armadilhas, como ver o vermelho), em ordem sugerida. Todo contrato foi reconferido
+ao vivo (Backend `d0f9594`, Frontend `c7006bc`). Quase tudo bateu com §10/§11; o que mudou
+está abaixo e nas fichas.
+
+- **Infra nova (Claude):** stub `env/wiremock/mappings/eco.json` e aliases `eco-mock` e
+  `eco-escapado-mock` no WireMock, mais na `SSRF_TEST_ALLOWLIST` do `backend`. É a parte
+  de XSS do SCAN-03: o mesmo eco do `q`, cru num host e escapado no outro (controle
+  negativo). Recriar `wiremock` e `backend`. O qa-enterprise faz o ativo sem linha nova no
+  seed. O WireMock 3.9.1 roda o Handlebars **sem escape** e não tem `escapeHtml`; o escape
+  é feito com `replace`.
+- **Correções do que este HANDOFF dizia:**
+  - O cache de scan é host + modo + **idioma**, por **2 minutos** (`expireAfterWrite`), e não
+    "por URL" nem "até reiniciar". Mesmo host em dois idiomas não pede restart (Etapa G
+    corrigida no lugar).
+  - O qa-free **cria** API key (Etapa 1 corrigida no lugar) → BUG-18.
+  - `moduleStatus` "OK" não prova contato com o alvo → BUG-16. O SCAN-01 precisa afirmar
+    `httpStatus` 200 junto.
+- **Vermelho sem buildar nada:** o 8099 (imagem de antes da rodada) falha nos quatro casos de
+  segurança: SSRF-03 hex → 200, SSRF-07 → 200, AUTH-05 com chave válida → 401, AUTH-04 com
+  código repetido → 200. Por isso o rebuild do 8099 fica para **depois** de o dono ver esses
+  vermelhos (ficha, seção 0).
+- **Achados laterais, abertos (não corrigidos):**
+  - **BUG-16** (P1) — host que não responde ganha nota (`.invalid` → 29/100, HIGH; 14
+    módulos "OK"; "Erro ao conectar: null"). O mesmo "OK" aparece quando o NVD estoura o
+    timeout: `cveFindings: []` com `moduleStatus.CVE` OK.
+  - **BUG-17** (P1) — a chave do cache ignora caminho e query (ativo em `/` e depois na
+    busca do Juice Shop devolve o resultado de `/` em 9 ms, sem SQLi) e a conta (outra
+    conta recebe o resultado, que não entra no histórico dela).
+  - **BUG-18** (P1) — conta FREE cria API key: `checkApiKeyAccess` libera `OWNER`, e todo
+    cadastro nasce `OWNER`. A tela mostra "disponível no PRO".
+- **Revisão do código do dono:** o UI-02 (Cypress) está verde sem testar o que diz. O campo
+  abre com "github.com", o `.type()` digita no fim, e o banco tem 21 scans de
+  `https://github.comwiremock:8080/health`. Passa porque o host inexistente ganha nota
+  (BUG-16) e `cy.contains('wiremock')` casa com "github.comwiremock". Matriz: ✅ → ⚠️. A
+  correção é do dono (ficha, fim do documento).
+- **Próximo passo:** o dono escreve os casos pela ficha. BUG-13, 16, 17 e 18 seguem abertos;
+  a ordem de correção é decisão do dono.

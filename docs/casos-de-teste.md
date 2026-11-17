@@ -61,7 +61,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | DOM-01 | Domínio | Varredura ativa em domínio não verificado | Recusada | Postman, RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) e Postman (2026-10-06) |
 | SCAN-01 | Motor | Varredura passiva no alvo controlado | Módulos esperados com status OK | RestAssured | P0 | 🔲 A fazer — BUG-03 corrigido no Backend (2026-10-29, `bugs/BUG-03-scan-http-porta-nao-padrao.md`); desbloqueado: passivo em `http://juice-shop:3000/` → `httpStatus` 200, nenhum módulo em `ERROR` |
 | SCAN-02 | Motor | Alvo com atraso forçado no WireMock | Módulo marcado como timeout, relatório indica resultado parcial | RestAssured + WireMock | P1 | 🔲 A fazer |
-| SCAN-03 | Motor | Varredura ativa no Juice Shop | XSS e SQL injection detectados | RestAssured | P0 | 🔲 A fazer, com alvo revisto — conexão (BUG-03) e SQLi (BUG-06) corrigidos: ativo no `/rest/products/search?q=apple` → `dbErrorLeakageSuspected:true`. Falta trocar o alvo da parte de XSS (esse endpoint não ecoa o `q` no servidor; `false` ali está certo). Teste `@Disabled` |
+| SCAN-03 | Motor | Varredura ativa no Juice Shop | XSS e SQL injection detectados | RestAssured | P0 | 🔲 A fazer, com alvo revisto — conexão (BUG-03) e SQLi (BUG-06) corrigidos: ativo no `/rest/products/search?q=apple` → `dbErrorLeakageSuspected:true`. XSS em alvo próprio (2026-11-15): stub `eco.json`, `eco-mock` (eco cru → `reflectedXssSuspected:true`) e `eco-escapado-mock` (controle → false com `xssProbePerformed:true`); no Juice Shop o `q` não ecoa no servidor e `false` ali está certo. Ficha 4 em `fichas-da-fila.md`. Teste `@Disabled` |
 | SCAN-04 | Motor | Alvo limpo com headers corretos | Nenhum falso positivo nesses módulos | RestAssured + WireMock | P1 | 🔲 A fazer |
 | SCAN-05 | Motor | Alvo que só anuncia `X-Powered-By: PHP/8.3.36` (stub `php-banner-mock`): CVE de extensão em que o PHP é só plataforma | `detectedVersions.PHP` = `8.3.36` (controle); `cveFindings` sem o CVE-2013-2220; nenhuma issue `CVE_*` nem nota "CVE potencial" no score | RestAssured + WireMock | P1 | 🔲 A fazer — BUG-08 corrigido no Backend (2026-11-07, `bugs/BUG-08-cve-de-extensao-como-cve-do-php.md`); contrato e armadilhas no HANDOFF §11 |
 | SCAN-06 | Motor | DKIM por provedor: domínio com SPF da Hostinger e seletores `hostingermail-a` (chave) + `-b`/`-c` revogados (`p=` vazio); domínio só com revogados; domínio com TXT curinga `v=spf1` | 1º: `dnsSecurityResult.dkimHintFound` true e `dkimSelector` `hostingermail-a`; 2º e 3º: `NOT_DETECTED` | RestAssured + DNS falso | P2 | 🔲 A fazer — BUG-09 corrigido no Backend (2026-11-09, `bugs/BUG-09-dkim-hostinger-e-chave-revogada.md`); desbloqueado: DNS falso no ambiente (`env/coredns/`), alvos `dkim-hostinger`, `dkim-revogado` e `dkim-curinga` `.dns-mock.test`; contrato no HANDOFF §11, Etapa C |
@@ -79,7 +79,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | REP-01 | Relatório | Download do PDF por usuário Pro | `application/pdf` válido, contém os achados do scan (checar com PDFBox) | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-26; qa-enterprise → `GET /scan/report/pdf` → 200 `application/pdf`, magic `%PDF`, PDFBox confirma alvo + achados. Ator é enterprise, não qa-pro: PRO pessoal é verified-only e não tem domínio verificado. PDFBox 2.0.31 no pom) |
 | REP-02 | Relatório | Achado conhecido no resultado do scan → mapeado para a norma | Mapeamento LGPD/ISO 27001 presente no `compliance` do `GET /scan` (NÃO no PDF — verificado 2026-10-26, o laudo exportável não traz o mapeamento) | RestAssured | P2 | ✅ Passou — RestAssured (2026-10-26; `GET /scan` → `compliance.lgpdItems`/`isoItems` presentes, achado conhecido mapeado: Art. 46 FAIL + A.8.24 FAIL). Escopo corrigido (estava "no PDF"; o mapeamento é na API) |
 | UI-01 | Interface | Login completo com 2FA | Chega ao dashboard | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress ✅ (2026-10-21; login + TOTP via cy.task → dashboard); Selenium pendente |
-| UI-02 | Interface | Iniciar scan, acompanhar e ver no histórico | Resultado e nota exibidos | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress ✅ (2026-10-22; scan → nota /100 → histórico, bypass via localStorage); Selenium pendente |
+| UI-02 | Interface | Iniciar scan, acompanhar e ver no histórico | Resultado e nota exibidos | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress **verde falso** (revisão 2026-11-15): o campo abre com "github.com", o `.type()` digita no fim e o scan vai para `github.comwiremock:8080/health`; passa porque host inexistente ganha nota (BUG-16) e `contains('wiremock')` casa com o host torto. Correção do spec é do dono (`fichas-da-fila.md`, fim). Selenium pendente |
 | UI-03 | Interface | Criar, editar e remover agendamento recorrente | Alterações persistem após recarregar | Cypress | P2 | ✅ Passou — Cypress (2026-10-23; criar → pausar → persistir no reload → remover; host único idempotente) |
 | UI-04 | Interface | Scan passivo de `quarantine-pct50.dns-mock.test` (DMARC `p=quarantine; pct=50` no DNS falso) e abrir o módulo Reconnaissance | Card DMARC mostra `p=quarantine; pct=50` — a política do registro, não o nível | Cypress | P2 | 🔲 A fazer — BUG-15 corrigido no Frontend (2026-11-14, `bugs/BUG-15-textos-do-laudo.md`); contrato no HANDOFF §11, Etapa G |
 
@@ -487,3 +487,16 @@ servidor (pool sem `IdiomaThreads`), HSTS `max-age=0` em inglês fixo e o card D
 nível no lugar da política ("p=medium"). Fix no Backend e no Frontend com regressão lá
 (`bugs/BUG-15-textos-do-laudo.md`). Casos novos SCAN-11 (P2, 🔲, stub `textos-mock`) e
 UI-04 (P2, 🔲, alvo do DNS falso).
+
+## 2026-11-15 — Fichas da fila; BUG-16, BUG-17 e BUG-18 abertos; UI-02 verde falso
+
+Fichas dos 14 casos da fila do dono em `fichas-da-fila.md`, com cada contrato reconferido ao
+vivo depois das etapas A–G. Infra nova para o XSS do SCAN-03: stub `eco.json` (`eco-mock` cru
+e `eco-escapado-mock` como controle negativo). Três achados laterais registrados e não
+corrigidos:
+- BUG-16: host que não responde ganha nota, e módulo que não verificou sai "OK".
+- BUG-17: o cache de scan ignora caminho, query e conta.
+- BUG-18: conta FREE cria API key.
+
+Na revisão, o UI-02 (Cypress) saiu de ✅ para ⚠️: o scan dele vai para um host torto, e o
+teste passa mesmo assim.
