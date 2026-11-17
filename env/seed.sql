@@ -126,9 +126,15 @@ ON CONFLICT (email) DO NOTHING;
 -- Regressão de bug real (corrigido 2026-09-30): GET /billing/subscription deve
 -- devolver a assinatura AUTHORIZED, NÃO a mais recente por data (que é a PENDING).
 -- Caso read-only: o teste só faz GET e asserta status=AUTHORIZED. Cenário fixo.
+--
+-- As duas assinaturas e o plano da conta são RENOVADOS a cada carga do seed (DO UPDATE,
+-- não DO NOTHING). A AUTHORIZED vence em 28 dias; num banco local que persiste, ela
+-- vencia e o job de expiração (que o PAY-10 dispara) a marcava EXPIRED — o PAY-15 caiu
+-- assim em 2026-11-17, 28 dias depois da primeira carga (20/10). Na CI o banco nasce a cada
+-- execução e isso não aparece. Local: `docker compose -f env/docker-compose.test.yml up seeder`.
 INSERT INTO accounts (id, type, plan, display_name, full_name, created_at, require2fa) VALUES
   ('a0000000-0000-0000-0000-000000000015', 'INDIVIDUAL', 'PRO', 'QA Pay 15', 'QA Pay 15', now(), false)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET plan = 'PRO';
 
 INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
                        account_id, terms_accepted, terms_accepted_at,
@@ -144,14 +150,16 @@ INSERT INTO subscriptions (id, account_id, plan, status, payment_method, amount,
   ('50000000-0000-0000-0000-0000000015a0', 'a0000000-0000-0000-0000-000000000015',
    'PRO', 'AUTHORIZED', 'PIX', 19.99, 'BRL', 'pay15-authorized',
    now() - interval '2 days', now() + interval '28 days', now() - interval '2 days')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET status = 'AUTHORIZED', created_at = EXCLUDED.created_at,
+  current_period_end = EXCLUDED.current_period_end, updated_at = EXCLUDED.updated_at;
 
 -- PENDING, criada AGORA (mais recente) — a "pegadinha" do bug
 INSERT INTO subscriptions (id, account_id, plan, status, payment_method, amount, currency,
                            mp_payment_id, created_at, updated_at) VALUES
   ('50000000-0000-0000-0000-0000000015b0', 'a0000000-0000-0000-0000-000000000015',
    'PRO', 'PENDING', 'PIX', 19.99, 'BRL', 'pay15-pending', now(), now())
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET status = 'PENDING', created_at = EXCLUDED.created_at,
+  updated_at = EXCLUDED.updated_at;
 
 -- ── PAY-09: conta dedicada ao teste de rate limit de checkout ─────────────────
 -- O teto é 5 checkouts/min POR USUÁRIO (bucket em memória). Conta própria pra o
