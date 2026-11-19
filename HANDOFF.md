@@ -629,6 +629,7 @@ lista divergirem, vale a ficha (§12).
 - **SCAN-10** (BUG-14) — contrato e armadilhas na §11, Etapa F.
 - **SCAN-11** e **UI-04** (BUG-15) — contrato e armadilhas na §11, Etapa G.
 - **PLAN-03** (BUG-18) — contrato na §12, Etapa H; ficha 15.
+- **PLAN-04** (BUG-19) — contrato na §12, Etapa I; ficha 16.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -947,7 +948,9 @@ O dono pediu para corrigir os laterais agora, no ritmo de sempre: um por etapa, 
 no Backend, conferência ao vivo, caso de QA novo na matriz, dono commita. Ordem: **H =
 BUG-18**, que não tinha decisão pendente. Depois vêm o BUG-19 (mesma área, achado na H), o
 BUG-17 e o BUG-16. O 17 e o 16 pedem decisões do dono, listadas em cada bug; o Claude
-traz uma recomendação na vez de cada um. O BUG-13 segue aberto.
+traz uma recomendação na vez de cada um. O BUG-13 segue aberto. O BUG-20 (achado na
+Etapa I) entra na fila. Ele pede decisão do dono (quanto por minuto em cada plano), e a
+posição dele na fila também é decisão do dono.
 
 ### Etapa H — BUG-18 ✅ corrigido (FREE criava API key) — 2026-11-17
 - **Achado corrigido na conferência:** a tela **não** mostrava "disponível no PRO" ao FREE.
@@ -990,3 +993,58 @@ traz uma recomendação na vez de cada um. O BUG-13 segue aberto.
   A AUTHORIZED vence 28 dias depois da carga; no banco local, carregado em 20/10, ela venceu hoje, o
   PAY-10 a expirou, e o PAY-15 caiu (esperava AUTHORIZED, veio PENDING). Na CI o banco nasce
   novo. Local: `docker compose -f env/docker-compose.test.yml up seeder`.
+
+### Etapa I — BUG-19 ✅ corrigido (gate de CI sem cota) — 2026-11-17
+- **Fix (Backend):** as travas `checkRateLimit` e `enforceScanLimits` saíram do
+  `ScanController` (eram `private`) para o serviço novo `ScanLimitsService`. O
+  `checkBeforeScan` chama as duas, rate limit primeiro (um 429 não gasta cota). O
+  `ScanController` usa o serviço nos mesmos pontos, sem mudar comportamento, e o
+  `ApiKeyController.ciGate` passa a chamar `checkBeforeScan` antes do orchestrator.
+- **Regressão:** `ApiKeyCiGateLimitesIntegrationTest`, com 6 testes, 5 vermelhos contra o
+  código antigo. O alvo é `http://127.0.0.1/`: o SsrfGuard recusa com 403 `DOMAIN_BLOCKED`
+  antes de qualquer requisição, então esse 403 quer dizer "passou pelas travas e chegou ao
+  scan", sem tocar a rede. Os testes cobrem:
+  - a chave antiga de conta rebaixada, com a cota gasta → 402;
+  - o gate gasta da mesma cota do `/scan`;
+  - FREE pedindo ativo → 402;
+  - PRO pedindo ativo sem domínio verificado na conta → 403 `ACCOUNT_DOMAIN_NOT_VERIFIED`;
+  - membro de equipe: a 61ª chamada no minuto → 429;
+  - controle: PRO passivo.
+
+  Suíte do Backend: 793 → 799. Container `backend` rebuildado. RestAssured do dono: 44 / 0
+  falhas / 2 pulados.
+- **Ao vivo (8081):** antes, com a cota do qa-free gasta e uma chave antiga (qa-free posto
+  em PRO para criar e devolvido ao FREE), o gate deu **200** três vezes, e o ativo deu 403 na
+  prova de posse em vez do 402 de plano. Depois: **402** nas três ("Limite diário de 10 scans
+  atingido."), e o ativo dá 402 "Scan ativo requer plano PRO ou superior." no `/scan` e no
+  gate. Chave revogada, qa-free no FREE, `backend` e `backend-noallowlist` reiniciados para
+  zerar a cota.
+- **Contrato do PLAN-04 (dono escreve), detalhado na ficha 16:**
+  - preparar: qa-free, token forjado, `GET /scan?url=http://wiremock:8080/health` até vir
+    402;
+  - `GET /api-keys/ci?url=http://wiremock:8080/health&threshold=0` → **402**, `message`
+    começando por "Limite diário de 10 scans atingido.";
+  - `GET /api-keys/ci?url=http://juice-shop:3000&active=true` → **402** "Scan ativo requer
+    plano PRO ou superior.";
+  - controle: qa-pro, `threshold=0` → **200** `pass: true`; `threshold=100` → **422**
+    `pass: false`.
+- **O que o PLAN-04 prova:** que o gate de CI não é atalho para scan sem cota nem para ativo
+  sem plano. Ele roda um scan inteiro, então tem de custar o mesmo que o `/scan`. O controle
+  PRO prova que o 402 vem da cota e do plano, não de "gate quebrado".
+- **Armadilhas do PLAN-04:**
+  - Token, não `X-Api-Key`: o qa-free não cria chave (BUG-18). A chave antiga fica no
+    Backend.
+  - Limiares 0 e 100 não dependem da nota; não afirme `score`.
+  - A cota é em memória: depois do caso, o qa-free fica sem scan até a meia-noite ou o
+    `restart backend`. Vale o mesmo para o PLAN-02, que gasta a mesma cota.
+  - O rate limit do gate não dá para afirmar com o seed: todas as contas são OWNER
+    (BUG-20).
+  - Vermelho: no 8099, os dois 402 viram 403 `DOMAIN_BLOCKED`. O 8099 entra na lista dos
+    vermelhos a ver antes do rebuild dele (SSRF-03 hex, SSRF-07, AUTH-05, AUTH-04, PLAN-03,
+    PLAN-04).
+- **Lateral → BUG-20** (aberto, P2): o `RateLimitService.allow` isenta o papel OWNER, e
+  todo cadastro é OWNER. Conferido no `verify-check`: visitante leva 429 na 6ª chamada do
+  minuto, e o qa-free fica em 200 nas doze. A isenção estava na nota do RATE-01 (2026-10-05)
+  como contrato. A correção pede decisão do dono: quanto por minuto em cada plano.
+- **Observação:** o nome de chave revogada continua ocupado (`POST /api-keys` com o mesmo
+  nome → 409). É mais um motivo para o nome único por execução do PLAN-03.

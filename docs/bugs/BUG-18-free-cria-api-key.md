@@ -94,8 +94,8 @@ Verificado ao vivo no docker-compose em 2026-11-17:
 ## O que o fix NÃO resolve
 
 - **Chave antiga de conta FREE continua valendo, por decisão.** Inclui quem rebaixa de PRO
-  para FREE. Enquanto o BUG-19 estiver aberto, essa chave ainda roda scan sem cota pelo gate
-  de CI.
+  para FREE. Até o BUG-19 ser corrigido (2026-11-17), essa chave rodava scan sem cota pelo
+  gate de CI; agora o gate cobra a cota do plano da conta.
 - O `isAdmin()` do Frontend continua com o mesmo nome e a mesma regra para outras telas (aba
   Admin, compliance). Lá ele quer dizer "dono ou admin da conta", que é o que essas telas
   pedem. Só a API key decidia plano por ele.

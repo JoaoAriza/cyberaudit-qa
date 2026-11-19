@@ -5,7 +5,7 @@ testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogado
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
 Contagem atual (2026-11-17, com os casos acrescentados depois, como o SSRF-07, o
-SCAN-05 a SCAN-11, o UI-04 e o PLAN-03): 51 casos — 21 P0, 23 P1, 7 P2.
+SCAN-05 a SCAN-11, o UI-04, o PLAN-03 e o PLAN-04): 52 casos — 21 P0, 24 P1, 7 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -41,7 +41,8 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | PLAN-01 | Planos | Usuário Free solicita relatório PDF | Bloqueado (recurso Pro) | RestAssured, Cypress | P0 | ✅ Passou — RestAssured (2026-10-09) e Cypress (2026-10-26; Free: botão PDF desabilitado + title "Exportar PDF requer plano PRO ou superior"; controle positivo Pro habilitado) |
 | PLAN-02 | Planos | Exceder a cota de scans do plano | Bloqueado com mensagem clara | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-10) |
 | PLAN-03 | Planos | Conta FREE (dona da conta, como todo cadastro) tenta criar API key; controle com conta PRO | FREE → 402 "API Keys requerem plano PRO ou Empresa."; PRO → 201 com `plainKey` (e revogar) | RestAssured | P1 | 🔲 A fazer — BUG-18 corrigido no Backend e no Frontend (2026-11-17, `bugs/BUG-18-free-cria-api-key.md`); contrato no HANDOFF §12, Etapa H |
-| RATE-01 | Rate limit | Exceder o limite configurado por usuário/IP | 429; volta a 200 após a janela | RestAssured | P1 | ⏸️ Adiado — decisão B tomada (ver nota 2026-10-05) |
+| PLAN-04 | Planos | Gate de CI (`GET /api-keys/ci`) com a cota do dia gasta e pedindo scan ativo numa conta FREE; controle com conta PRO | Cota gasta → 402 "Limite diário de 10 scans atingido.…"; ativo no FREE → 402 "Scan ativo requer plano PRO ou superior."; PRO → 200 (`threshold=0`) e 422 (`threshold=100`) | RestAssured | P1 | 🔲 A fazer — BUG-19 corrigido no Backend (2026-11-17, `bugs/BUG-19-gate-de-ci-sem-cota.md`); contrato no HANDOFF §12, Etapa I |
+| RATE-01 | Rate limit | Exceder o limite configurado por usuário/IP | 429; volta a 200 após a janela | RestAssured | P1 | ⏸️ Adiado — decisão B tomada (ver nota 2026-10-05); BUG-20 (2026-11-17): a isenção do OWNER vale para todo cadastro, aberto |
 
 ## Anti-SSRF
 
@@ -515,3 +516,16 @@ scan sem cota diária, sem rate limit e sem a trava de plano do scan ativo.
 
 Infra: o seed do PAY-15 passa a renovar as assinaturas a cada carga. A AUTHORIZED tinha
 vencido no banco local, 28 dias depois da primeira carga.
+
+## 2026-11-17 — BUG-19 corrigido (gate de CI sem cota); PLAN-04 novo; BUG-20 aberto
+
+Segunda etapa da rodada dos achados laterais (HANDOFF §12, Etapa I). O gate de CI passa
+pelas mesmas travas do `/scan` antes de escanear: rate limit, cota diária e, no ativo, a
+trava de plano e de domínio verificado na conta. As travas saíram do `ScanController` para
+o `ScanLimitsService`, que os dois usam. Regressão no Backend
+(`bugs/BUG-19-gate-de-ci-sem-cota.md`). Caso novo PLAN-04 (P1, 🔲).
+
+Achado lateral registrado e não corrigido: BUG-20. O rate limit por minuto isenta o papel
+OWNER, e todo cadastro é OWNER, então nenhuma conta registrada tem limite por minuto. A
+isenção já constava da nota do RATE-01 (2026-10-05) como contrato. A correção pede decisão
+do dono (quanto por minuto em cada plano).

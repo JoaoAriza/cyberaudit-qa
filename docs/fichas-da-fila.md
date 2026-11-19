@@ -82,6 +82,7 @@ ele para o `TestConfig`, mas a decisão é sua.
 | 13 | SCAN-06 | P2 | `DnsFalsoTest` | Igual ao SCAN-07, com outro campo. |
 | 14 | UI-04 | P2 | `ui-04-dmarc.cy.js` (nova) | O único de tela. Faça junto com a revisão do UI-02 (fim do documento). |
 | 15 | PLAN-03 | P1 | `ApiKeyRevogadaTest` ou classe própria | Entrou em 2026-11-17 (BUG-18). Pode ir logo depois do AUTH-05: mesmo endpoint. |
+| 16 | PLAN-04 | P1 | junto do PLAN-02 ou classe própria | Entrou em 2026-11-17 (BUG-19). Reaproveita a cota gasta do PLAN-02. |
 
 ---
 
@@ -539,6 +540,54 @@ passava (BUG-18).
 **Ver o vermelho.** `base.uri.noAllowlist` (8099): qa-free → 201.
 
 **Conferido em 2026-11-17.** qa-free 402 com a mensagem acima; qa-pro 201 → 204.
+
+---
+
+### 16. PLAN-04 (P1) · acrescentado em 2026-11-17
+
+**O que prova e por quê.** Que o gate de CI não é uma porta dos fundos para a cota e para
+o plano. O gate roda um scan inteiro, e antes do fix pulava as travas do `/scan`. Com a
+cota do dia gasta, o `/scan` dava 402 e o gate seguia dando 200. Numa conta FREE, o ativo
+pulava o "requer PRO" (BUG-19).
+
+**Preparar.** Gastar a cota do qa-free: `GET /scan?url=http://wiremock:8080/health`, token
+do qa-free, repetido até vir 402 (no máximo 11 chamadas). Repita até o 402 em vez de contar
+10, porque a cota pode já estar gasta (o PLAN-02 gasta a mesma).
+
+**Pedido e afirmar.**
+1. qa-free: `GET /api-keys/ci?url=http://wiremock:8080/health&threshold=0` → **402**,
+   `message` começando por "Limite diário de 10 scans atingido.".
+2. qa-free: `GET /api-keys/ci?url=http://juice-shop:3000&active=true` → **402**, `message`
+   "Scan ativo requer plano PRO ou superior.". Esse vale com ou sem cota: a trava de plano
+   vem antes da cota.
+3. Controle: qa-pro, `GET /api-keys/ci?url=http://wiremock:8080/health&threshold=0` → **200**
+   com `pass: true`; o mesmo com `threshold=100` → **422** com `pass: false`. Prova que
+   o gate funciona e que o 402 do passo 1 vem da cota, não de "gate quebrado".
+
+**Armadilhas.**
+- Use o token (`Authorization: Bearer`), não `X-Api-Key`. O gate aceita os dois, e o
+  qa-free não cria chave desde o BUG-18. O caminho com chave antiga de conta rebaixada está
+  coberto no Backend (`ApiKeyCiGateLimitesIntegrationTest`).
+- Os limiares 0 e 100 não dependem da nota do alvo: toda nota é ≥ 0, e o `wiremock` sem
+  HTTPS nunca chega a 100. Não afirme `score`.
+- A cota fica na memória do backend, por conta e por dia. Depois deste caso (e do PLAN-02),
+  o qa-free fica sem scan até a meia-noite ou até
+  `docker compose -f env/docker-compose.test.yml restart backend`. Deixe-o por último, ou
+  na mesma classe do PLAN-02.
+- Não afirme o rate limit do gate. As três contas do seed são `OWNER`, e `OWNER` passa
+  direto pelo limite por minuto (BUG-20, aberto). O rate limit do gate está coberto no
+  Backend com um membro de equipe.
+- Não peça ativo no controle PRO: o qa-pro não tem domínio verificado na conta, e daria 403
+  `ACCOUNT_DOMAIN_NOT_VERIFIED` por outro motivo.
+
+**Ver o vermelho.** `base.uri.noAllowlist` (8099, imagem antiga). O preparar funciona lá: o
+`/scan` dá 403 dez vezes (sem allowlist, o alvo local é barrado, mas a cota conta) e depois
+402. Os passos 1 e 2 dão **403** `DOMAIN_BLOCKED` em vez de 402: o gate passou pelas travas
+e só parou no SSRF. O controle não roda no 8099 pelo mesmo motivo. A cota do 8099 é
+separada da do 8081.
+
+**Conferido em 2026-11-17.** No 8081: passos 1 e 2 → 402 com as mensagens acima; qa-pro 200
+e 422. No 8099: `/scan` 403 ×10 e 402; passos 1 e 2 → 403 `DOMAIN_BLOCKED`.
 
 ---
 
