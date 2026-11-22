@@ -4,8 +4,8 @@ Consolida os 26 casos originais do escopo (`CyberAudit QA — Escopo do projeto 
 testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogados em
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
-Contagem atual (2026-11-17, com os casos acrescentados depois, como o SSRF-07, o
-SCAN-05 a SCAN-12, o UI-04, o PLAN-03 e o PLAN-04): 53 casos — 21 P0, 25 P1, 7 P2.
+Contagem atual (2026-11-22, com os casos acrescentados depois, como o SSRF-07, o
+SCAN-05 a SCAN-13, o UI-04, o PLAN-03 e o PLAN-04): 54 casos — 21 P0, 26 P1, 7 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -61,7 +61,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
 | DOM-01 | Domínio | Varredura ativa em domínio não verificado | Recusada | Postman, RestAssured | P0 | ✅ Passou — RestAssured (2026-10-05) e Postman (2026-10-06) |
-| SCAN-01 | Motor | Varredura passiva no alvo controlado | Módulos esperados com status OK | RestAssured | P0 | 🔲 A fazer — BUG-03 corrigido no Backend (2026-10-29, `bugs/BUG-03-scan-http-porta-nao-padrao.md`); desbloqueado: passivo em `http://juice-shop:3000/` → `httpStatus` 200, nenhum módulo em `ERROR` |
+| SCAN-01 | Motor | Varredura passiva no alvo controlado | Módulos esperados com status OK | RestAssured | P0 | 🔲 A fazer — BUG-03 corrigido no Backend (2026-10-29, `bugs/BUG-03-scan-http-porta-nao-padrao.md`); desbloqueado: passivo em `http://juice-shop:3000/` → `httpStatus` 200, nenhum módulo em `ERROR` fora `CERT_TRANSPARENCY` e `CVE`, que dependem de serviço externo (BUG-16, ficha 3) |
 | SCAN-02 | Motor | Alvo com atraso forçado no WireMock | Módulo marcado como timeout, relatório indica resultado parcial | RestAssured + WireMock | P1 | 🔲 A fazer |
 | SCAN-03 | Motor | Varredura ativa no Juice Shop | XSS e SQL injection detectados | RestAssured | P0 | 🔲 A fazer, com alvo revisto — conexão (BUG-03) e SQLi (BUG-06) corrigidos: ativo no `/rest/products/search?q=apple` → `dbErrorLeakageSuspected:true`. XSS em alvo próprio (2026-11-15): stub `eco.json`, `eco-mock` (eco cru → `reflectedXssSuspected:true`) e `eco-escapado-mock` (controle → false com `xssProbePerformed:true`); no Juice Shop o `q` não ecoa no servidor e `false` ali está certo. Ficha 4 em `fichas-da-fila.md`. Teste `@Disabled` |
 | SCAN-04 | Motor | Alvo limpo com headers corretos | Nenhum falso positivo nesses módulos | RestAssured + WireMock | P1 | 🔲 A fazer |
@@ -73,6 +73,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SCAN-10 | Pontuação | Alvo só com achados LOW de higiene (stub `pesos-mock`): versão no `Server`, sem Referrer-Policy, sem Permissions-Policy, `/admin/` no robots.txt respondendo 403, sem security.txt | Em `score.notes`: versão exposta e robots.txt `-2`; Referrer-Policy, Permissions-Policy e security.txt `-1`. Os cinco achados em `score.issues` com `severity` LOW | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-14 corrigido no Backend (2026-11-13, `bugs/BUG-14-peso-low-igual-a-medium.md`); contrato no HANDOFF §11, Etapa F |
 | SCAN-11 | Motor | Alvo com `Strict-Transport-Security: max-age=0` (stub `textos-mock`), scan em pt-BR e em en | `headers["Strict-Transport-Security"]` = `WEAK (max-age=0 apaga o HSTS)` em pt-BR e `WEAK (max-age=0 deletes HSTS)` em en | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-15 corrigido no Backend (2026-11-14, `bugs/BUG-15-textos-do-laudo.md`); contrato no HANDOFF §11, Etapa G |
 | SCAN-12 | Motor | Cache de scan: ativo na home e logo depois na busca do Juice Shop (qa-enterprise); passivo num endereço único por execução com o qa-enterprise e logo depois com o qa-pro; controle: o qa-pro repete o endereço | Busca com a `url` pedida e `dbErrorLeakageSuspected` true; `GET /history/juice-shop` do qa-pro com **1** item da `url` única, e ainda 1 depois do controle (acerto do cache) | RestAssured | P1 | 🔲 A fazer — BUG-17 corrigido no Backend (2026-11-18, `bugs/BUG-17-cache-de-scan-ignora-caminho.md`); contrato no HANDOFF §12, Etapa J; ficha 17 |
+| SCAN-13 | Motor | Alvo inexistente ou sem resposta: `http://nao-existe-qa.invalid` (qa-free, cota lida antes e depois); `http://wiremock:9` (resolve, nada escuta na porta); controle: alvo que responde 404 | 1º: **422**, `error` `TARGET_NOT_FOUND`, `host` = o domínio, `remainingScans` igual antes e depois; 2º: **422**, `error` `TARGET_UNREACHABLE`, `host` `wiremock`, `message` sem "null"; controle: 200 com `httpStatus` 404 | RestAssured | P1 | 🔲 A fazer — BUG-16 corrigido no Backend (2026-11-22, `bugs/BUG-16-host-sem-resposta-ganha-nota.md`); contrato no HANDOFF §12, Etapa K; ficha 18 |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
 ## Relatório e interface
@@ -82,7 +83,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | REP-01 | Relatório | Download do PDF por usuário Pro | `application/pdf` válido, contém os achados do scan (checar com PDFBox) | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-26; qa-enterprise → `GET /scan/report/pdf` → 200 `application/pdf`, magic `%PDF`, PDFBox confirma alvo + achados. Ator é enterprise, não qa-pro: PRO pessoal é verified-only e não tem domínio verificado. PDFBox 2.0.31 no pom) |
 | REP-02 | Relatório | Achado conhecido no resultado do scan → mapeado para a norma | Mapeamento LGPD/ISO 27001 presente no `compliance` do `GET /scan` (NÃO no PDF — verificado 2026-10-26, o laudo exportável não traz o mapeamento) | RestAssured | P2 | ✅ Passou — RestAssured (2026-10-26; `GET /scan` → `compliance.lgpdItems`/`isoItems` presentes, achado conhecido mapeado: Art. 46 FAIL + A.8.24 FAIL). Escopo corrigido (estava "no PDF"; o mapeamento é na API) |
 | UI-01 | Interface | Login completo com 2FA | Chega ao dashboard | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress ✅ (2026-10-21; login + TOTP via cy.task → dashboard); Selenium pendente |
-| UI-02 | Interface | Iniciar scan, acompanhar e ver no histórico | Resultado e nota exibidos | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress **verde falso** (revisão 2026-11-15): o campo abre com "github.com", o `.type()` digita no fim e o scan vai para `github.comwiremock:8080/health`; passa porque host inexistente ganha nota (BUG-16) e `contains('wiremock')` casa com o host torto. Correção do spec é do dono (`fichas-da-fila.md`, fim). Selenium pendente |
+| UI-02 | Interface | Iniciar scan, acompanhar e ver no histórico | Resultado e nota exibidos | Cypress, Selenium | P1 | ⚠️ Parcial — Cypress **verde falso** (revisão 2026-11-15): o campo abre com "github.com", o `.type()` digita no fim e o scan vai para `github.comwiremock:8080/health`; passa porque host inexistente ganha nota (BUG-16) e `contains('wiremock')` casa com o host torto. Correção do spec é do dono (`fichas-da-fila.md`, fim). Com o fix do BUG-16 (2026-11-22), o host torto leva 422 e a tela não mostra nota: o spec como está deve ficar vermelho no `contains('/100')`. Selenium pendente |
 | UI-03 | Interface | Criar, editar e remover agendamento recorrente | Alterações persistem após recarregar | Cypress | P2 | ✅ Passou — Cypress (2026-10-23; criar → pausar → persistir no reload → remover; host único idempotente) |
 | UI-04 | Interface | Scan passivo de `quarantine-pct50.dns-mock.test` (DMARC `p=quarantine; pct=50` no DNS falso) e abrir o módulo Reconnaissance | Card DMARC mostra `p=quarantine; pct=50` — a política do registro, não o nível | Cypress | P2 | 🔲 A fazer — BUG-15 corrigido no Frontend (2026-11-14, `bugs/BUG-15-textos-do-laudo.md`); contrato no HANDOFF §11, Etapa G |
 
@@ -540,3 +541,23 @@ visitantes dividem uma entre si. Regressão no Backend
 (`bugs/BUG-17-cache-de-scan-ignora-caminho.md`). Caso novo SCAN-12 (P1, 🔲).
 
 A armadilha de cache do SCAN-03 (ficha 4) deixou de valer.
+
+## 2026-11-22 — BUG-16 corrigido (alvo sem resposta ganhava nota); SCAN-13 novo
+
+Quarta etapa da rodada dos achados laterais (HANDOFF §12, Etapa K). Decisões do dono:
+- o domínio que não resolve leva 422 `TARGET_NOT_FOUND` antes de gastar cota;
+- o host que resolve, mas onde nada aceita conexão nem em http nem em https, leva 422
+  `TARGET_UNREACHABLE` (a cota já foi gasta);
+- o NVD e os logs de CT que não respondem marcam o módulo `ERROR`, que entra no aviso de
+  resultado parcial, em vez de "OK".
+
+Regressão no Backend e no Frontend (`bugs/BUG-16-host-sem-resposta-ganha-nota.md`). Caso
+novo SCAN-13 (P1, 🔲).
+
+Muda o SCAN-01: `CERT_TRANSPARENCY` e `CVE` podem sair `ERROR` quando o crt.sh ou o NVD não
+respondem, e a ficha passa a excluir os dois. O SCAN-05 ganha `moduleStatus.CVE` como
+pré-condição. O UI-02 deixa de passar com o host torto: verde falso → vermelho verdadeiro,
+correção do spec com o dono.
+
+Infra: o seed do PAY-07 passa a renovar a assinatura a cada carga, como o do PAY-15. A
+AUTHORIZED tinha vencido no banco local, e o PAY-07 caiu com `EXPIRED`.

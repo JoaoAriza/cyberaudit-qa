@@ -54,8 +54,10 @@ uma expectativa uma vez mostra que a asserção sabe falhar.
   `score.issues` (lista com `id`, `severity` e `title`).
 - Nota e título saem no idioma da requisição. Mande `Accept-Language` em todo scan e afirme
   issue pelo `id`; nota, pelo começo do texto e pelo número do fim.
-- `moduleStatus` "OK" **não prova** que o módulo falou com o alvo (BUG-16, aberto). Um host
-  que não existe dá 14 módulos "OK". A prova de contato é `httpStatus`.
+- `moduleStatus`: desde o fix do BUG-16 (2026-11-22), alvo que não existe ou não responde
+  nem chega a laudo (422, SCAN-13). `CERT_TRANSPARENCY` e `CVE` dependem de serviço de fora
+  (crt.sh e NVD) e saem `ERROR` quando ele não responde, sem o caso ter falhado. A prova de
+  contato com o alvo continua sendo `httpStatus`.
 - Nenhum stub tem HTTPS válido. Por isso ficha nenhuma afirma `score.score` nem `riskLevel`:
   os -35 do SSL e o HIGH do CSP ausente não são do caso.
 
@@ -84,6 +86,7 @@ ele para o `TestConfig`, mas a decisão é sua.
 | 15 | PLAN-03 | P1 | `ApiKeyRevogadaTest` ou classe própria | Entrou em 2026-11-17 (BUG-18). Pode ir logo depois do AUTH-05: mesmo endpoint. |
 | 16 | PLAN-04 | P1 | junto do PLAN-02 ou classe própria | Entrou em 2026-11-17 (BUG-19). Reaproveita a cota gasta do PLAN-02. |
 | 17 | SCAN-12 | P1 | `ScanAtivoJuiceShopTest` ou classe própria | Entrou em 2026-11-19 (BUG-17). Usa o SQLi do SCAN-03: faça depois dele. |
+| 18 | SCAN-13 | P1 | `ScanMotorTest` ou classe própria | Entrou em 2026-11-22 (BUG-16). Dois 422 e um controle: faça depois do SCAN-01. |
 
 ---
 
@@ -155,20 +158,27 @@ configurado algum.
 
 **Afirmar.**
 - 200 e **`httpStatus` = 200**. Esta é a asserção que prova o caso.
-- Todo valor de `moduleStatus` = `OK`. Hoje são 15 módulos; afirme "nenhum diferente de
-  OK", não a contagem.
+- Todo valor de `moduleStatus` = `OK`, **fora `CERT_TRANSPARENCY` e `CVE`**. Hoje são 15
+  módulos; afirme "nenhum diferente de OK entre os outros", não a contagem.
 
 **Armadilhas.**
-- **Só "todo módulo OK" não basta** (BUG-16): `http://nao-existe-qa.invalid` também dá 14
-  módulos OK, com `httpStatus` 0. Sem a asserção do `httpStatus`, o caso passa sem o alvo
-  ter respondido.
+- **CT e CVE podem sair `ERROR` sem o caso ter falhado** (desde o fix do BUG-16,
+  2026-11-22). Os dois dependem de serviço de fora (crt.sh/certspotter e NVD) e marcam
+  `ERROR` quando ele não responde. No Docker o crt.sh falha em parte das rodadas (502), e o
+  certspotter sempre dá 403. O resultado traz então a nota "Resultado parcial — não
+  concluíram: Certificate Transparency". Não é o que o SCAN-01 testa: deixe os dois fora.
+- Alvo que não existe ou não responde não chega a laudo: dá 422 (é o SCAN-13). O
+  `httpStatus` 200 continua sendo a prova de que o alvo respondeu.
 - `openPorts: []` é esperado (a 3000 não está na lista de portas de risco). Não afirme
   porta aberta.
 
 **Ver o vermelho.** Não há imagem antiga à mão. Para ver a asserção falhar, troque o alvo
-uma vez por `http://juice-shop:3999/` (porta fechada): `httpStatus` 0.
+uma vez por `http://juice-shop:3999/` (porta fechada). Desde o fix do BUG-16 a resposta é
+**422** `TARGET_UNREACHABLE` (antes era 200 com `httpStatus` 0). Quebra já o "status 200".
 
-**Conferido em 2026-11-15.** `httpStatus` 200, 15 módulos OK, 22 s.
+**Conferido em 2026-11-15 e 2026-11-22.** `httpStatus` 200, 15 módulos OK, 22 s. Em
+2026-11-22, `httpStatus` 200 nas duas rodadas: numa, os 15 OK; na outra,
+`CERT_TRANSPARENCY` `ERROR` (crt.sh 502). `juice-shop:3999` → 422.
 
 ---
 
@@ -377,13 +387,16 @@ container, sem API key).
   nenhuma nota com "CVE".
 
 **Armadilhas.**
-- **O NVD oscila. Hoje uma rodada deu `cveFindings: []`.** O NVD levou 12 s, e o timeout do
-  backend é 12 s. O `moduleStatus.CVE` disse "OK" mesmo assim (BUG-16). Com `[]`, as três
-  negativas passam sem testar nada.
-- Saída recomendada: tratar a presença do `CVE-2007-3205` como **pré-condição** com
-  `Assumptions.assumeTrue(...)` do JUnit. Sem ela, o teste sai **pulado** ("não deu para
-  testar"), em vez de verde falso ou vermelho de rede. A alternativa é afirmar a presença
-  como asserção comum e aceitar um vermelho de vez em quando por causa do NVD.
+- **O NVD oscila.** Numa rodada de 2026-11-15 veio `cveFindings: []`: o NVD levou 12 s, e o
+  timeout do backend é 12 s. Com `[]`, as três negativas passam sem testar nada. Desde o fix
+  do BUG-16 (2026-11-22), quando o NVD não responde, `moduleStatus.CVE` sai `ERROR` (antes
+  dizia "OK").
+- Saída recomendada: uma **pré-condição** com `Assumptions.assumeTrue(...)` do JUnit, de
+  duas partes: `moduleStatus.CVE` = `OK` (todas as consultas ao NVD responderam) e
+  `cveFindings` contém o `CVE-2007-3205` (a consulta do PHP voltou com dado).
+  Sem elas, o teste sai **pulado** ("não deu para testar"), em vez de verde falso ou
+  vermelho de rede. A alternativa é afirmar as duas como asserção comum e aceitar um
+  vermelho de vez em quando por causa do NVD.
 - Não fixe a lista inteira de CVEs nem o score: o NVD muda.
 - Cache: a rodada vazia fica guardada por 2 min. Rodar de novo logo em seguida devolve o
   mesmo vazio.
@@ -392,7 +405,8 @@ container, sem API key).
 `CVE-2013-2220` na lista e a issue `CVE_CVE_2013_2220`.
 
 **Conferido em 2026-11-15.** PHP 8.3.36. Rodada 1: `[]` com CVE "OK". Rodada 2 (2 min
-depois): `["CVE-2007-3205"]`. Sem issue nem nota de CVE nas duas.
+depois): `["CVE-2007-3205"]`. Sem issue nem nota de CVE nas duas. Em 2026-11-22:
+`moduleStatus.CVE` OK e `["CVE-2007-3205"]`.
 
 ---
 
@@ -644,6 +658,73 @@ do qa-pro depois do passo 4; ainda 1 depois do controle, que voltou em 0,23 s.
 
 ---
 
+### 18. SCAN-13 (P1) · acrescentado em 2026-11-22
+
+**O que prova e por quê.** Que um alvo que não existe ou não responde fica sem laudo e sem
+nota. Antes (BUG-16), um domínio digitado errado saía com 17/100, CRITICAL, e um host sem
+nada na porta saía com 29/100, HIGH. Os 14 módulos marcavam "OK" sem terem falado com
+ninguém, e o scan gastava a cota. O caso prova também duas coisas:
+- a recusa do domínio inexistente vem antes da cota;
+- um site que responde com erro continua sendo escaneado: o 422 não pega quem respondeu.
+
+**Preparar.** Nada. O `.invalid` é reservado (RFC 6761) e nunca resolve. O `wiremock`
+resolve na rede do Docker, e nada escuta na porta 9.
+
+**Pedido e afirmar.** Mande `Accept-Language: pt-BR` em todos.
+
+Parte A, domínio que não resolve (qa-free):
+1. `GET /auth/me` → guarde o `remainingScans`.
+2. `GET /scan?url=http://nao-existe-qa.invalid&active=false` → **422**:
+   - `error` = `TARGET_NOT_FOUND`;
+   - `host` = `nao-existe-qa.invalid`;
+   - `message` contém o domínio.
+3. `GET /auth/me` → `remainingScans` igual ao do passo 1.
+
+Parte B, resolve mas não responde (qa-pro):
+4. `GET /scan?url=http://wiremock:9&active=false` → **422**:
+   - `error` = `TARGET_UNREACHABLE`;
+   - `host` = `wiremock`;
+   - `message` não contém "null".
+
+Controle (qa-pro):
+5. `GET /scan?url=http://wiremock:8080/nao-existe-qa&active=false` → **200** com
+   `httpStatus` = 404. O WireMock responde 404 para caminho sem stub. O site respondeu, só
+   que com erro, e tem o que auditar.
+
+**Armadilhas.**
+- **Cota do qa-free.** O PLAN-02 zera a cota dele. Com a cota zerada, o passo 2 continua
+  dando 422, porque a checagem do domínio vem antes da cota, e o passo 3 compara 0 com 0.
+  O caso continua valendo: um 402 no passo 2 seria o vermelho. Para ver o "igual antes e
+  depois" com um número diferente de zero, rode antes do PLAN-02 ou depois de reiniciar o
+  backend (a cota é em memória).
+- **A parte B gasta cota.** Foi decisão do dono: só se descobre que o site não responde
+  tentando conectar. Por isso a parte B usa o qa-pro, que não tem limite diário
+  (`remainingScans` null). Com o qa-free de cota zerada, o `wiremock:9` dá 402 antes de
+  tentar conectar.
+- **Afirme o `error`, e não só o 422.** O 422 sozinho não diz qual dos dois casos foi.
+- **A `message` sai no idioma pedido.** Não afirme o texto inteiro: afirme que contém o
+  host.
+- **Nada de `localhost` ou `127.0.0.1` na parte B.** O SsrfGuard dá 403 (`DOMAIN_BLOCKED`)
+  antes. O mesmo vale para nomes como `metadata.google.internal`, que não resolvem e
+  continuam 403.
+- **Tempo.** As partes A e B voltam em menos de 1 s. O controle é um scan inteiro e leva
+  cerca de 20 s.
+
+**Ver o vermelho.**
+- Parte A no 8099 (imagem antiga, sem allowlist): o `.invalid` passa pelo SsrfGuard (não
+  resolve, então não é interno) e volta **200**, 15/100, `httpStatus` 0.
+- Parte B no 8099: dá 403, porque o 8099 bloqueia o `wiremock` (rede privada). O vermelho
+  da B pede o `backend` buildado no commit `92303a4`, o último antes do fix. Se quiser, eu
+  preparo (é infra).
+- Medido antes do fix: `wiremock:9` → 200 em 21 s, 29/100, HIGH.
+
+**Conferido em 2026-11-22.**
+- A: 422 em 0,28 s, cota 10/10 → 10/10. Com a cota zerada, ainda 422.
+- B: 422 em 0,37 s, `host` wiremock.
+- Controle: 200, `httpStatus` 404, 32/100.
+
+---
+
 ## Revisão: o UI-02 está verde sem testar o que diz (achado 2026-11-15)
 
 Achado ao montar a ficha do UI-04. **É o seu teste, não o produto.** Não mexi nele.
@@ -658,3 +739,8 @@ Achado ao montar a ficha do UI-04. **É o seu teste, não o produto.** Não mexi
   requisição `POST /scan/async` (interceptada) ou o host exato no histórico. Depois disso,
   vale conferir que a nota de `wiremock:8080/health` aparece.
 - **Na matriz:** o UI-02 foi de ✅ para ⚠️ até a correção.
+- **Depois do fix do BUG-16 (2026-11-22):** `github.comwiremock` não resolve. O
+  `POST /scan/async` leva 422 e a tela mostra o aviso de domínio não encontrado, sem nota.
+  O spec como está deve falhar no `cy.contains('/100')` (linha 17), depois dos 60 s do
+  timeout. É o vermelho verdadeiro, e a correção continua a mesma. Não rodei o spec. O
+  aviso eu conferi na tela com `nao-existe-qa.invalid`.

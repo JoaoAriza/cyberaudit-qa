@@ -632,6 +632,7 @@ lista divergirem, vale a ficha (§12).
 - **PLAN-03** (BUG-18) — contrato na §12, Etapa H; ficha 15.
 - **PLAN-04** (BUG-19) — contrato na §12, Etapa I; ficha 16.
 - **SCAN-12** (BUG-17) — contrato na §12, Etapa J; ficha 17.
+- **SCAN-13** (BUG-16) — contrato na §12, Etapa K; ficha 18.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -922,7 +923,8 @@ está abaixo e nas fichas.
     corrigida no lugar).
   - O qa-free **cria** API key (Etapa 1 corrigida no lugar) → BUG-18.
   - `moduleStatus` "OK" não prova contato com o alvo → BUG-16. O SCAN-01 precisa afirmar
-    `httpStatus` 200 junto.
+    `httpStatus` 200 junto. (Corrigido na Etapa K: alvo sem resposta leva 422, e CT e CVE
+    saem `ERROR` quando o serviço de fora não responde.)
 - **Vermelho sem buildar nada:** o 8099 (imagem de antes da rodada) falha nos quatro casos de
   segurança: SSRF-03 hex → 200, SSRF-07 → 200, AUTH-05 com chave válida → 401, AUTH-04 com
   código repetido → 200. Por isso o rebuild do 8099 fica para **depois** de o dono ver esses
@@ -930,7 +932,7 @@ está abaixo e nas fichas.
 - **Achados laterais, abertos (não corrigidos):**
   - **BUG-16** (P1) — host que não responde ganha nota (`.invalid` → 29/100, HIGH; 14
     módulos "OK"; "Erro ao conectar: null"). O mesmo "OK" aparece quando o NVD estoura o
-    timeout: `cveFindings: []` com `moduleStatus.CVE` OK.
+    timeout: `cveFindings: []` com `moduleStatus.CVE` OK. ✅ corrigido, Etapa K abaixo.
   - **BUG-17** (P1) — a chave do cache ignora caminho e query (ativo em `/` e depois na
     busca do Juice Shop devolve o resultado de `/` em 9 ms, sem SQLi) e a conta (outra
     conta recebe o resultado, que não entra no histórico dela). ✅ corrigido, Etapa J abaixo.
@@ -1096,3 +1098,79 @@ posição dele na fila também é decisão do dono.
     `256670f`; o Claude prepara se o dono pedir.
 - **Fichas:** a armadilha de cache do SCAN-03 (ficha 4) deixou de valer, e a seção 0 das
   fichas passou a descrever a chave nova.
+
+### Etapa K — BUG-16 ✅ corrigido (alvo sem resposta ganhava nota) — 2026-11-22
+- **Decisões do dono (2026-11-22):**
+  1. domínio que não resolve → 422 `TARGET_NOT_FOUND`, **antes** de gastar cota;
+  2. resolve, mas nada aceita conexão nem em http nem em https → 422 `TARGET_UNREACHABLE`
+     (a cota já foi gasta: só se descobre tentando conectar);
+  3. NVD ou logs de CT que não respondem → módulo `ERROR`, no aviso de resultado parcial,
+     em vez de "OK".
+- **Fix (Backend):**
+  - `ScanTargetService` (novo): resolve o domínio no `ScanLimitsService.checkBeforeScan`
+    (depois do rate limit, antes da cota; vale para `/scan`, `/scan/async`, `/scan/report`,
+    `/scan/report/pdf` e `/api-keys/ci`) e de novo no `ScanOrchestrator.execute`, para o
+    agendador.
+  - Nome que o `SsrfGuard` recusa sem DNS (sufixo interno, IPv4 ofuscado como
+    `http://2130706433`) passa por essa checagem e continua levando 403. Sem essa ressalva,
+    o SSRF-03 viraria 422.
+  - `HttpFetchResult.semConexao` + o https conferido antes de desistir →
+    `TargetUnreachableException`. O texto do erro diz o motivo, sem "null".
+  - `CVECorrelationService.correlacionar` diz se ficou `completa`. O
+    `CrtShService.fetchCertsOuNull` devolve `null` quando nenhuma fonte respondeu. CVE e CT
+    marcam `ERROR` nesses casos.
+  - O polling do `/scan/async` recebe `errorCode` e `errorHost`.
+- **Fix (Frontend):** os dois códigos mostram a mensagem do Backend como aviso, no 422 do
+  POST e no ERROR do polling (`src/alvoInacessivel.ts`).
+- **Regressão:**
+  - `AlvoInacessivelIntegrationTest`: 8 testes, 5 vermelhos contra o código antigo, 3
+    controles verdes nos dois. Nada sai da máquina: o alvo que responde é um servidor em
+    127.0.0.1, liberado só na classe. O `CookieSecurityService`, logo depois da checagem de
+    conexão, é um mock que lança uma exceção de sinal.
+  - Testes de unidade: `HttpFetchSemConexaoTest`, `CVENvdSemRespostaTest`,
+    `ModuloExternoNaoVerificadoTest` e `AsyncScanAlvoInacessivelTest`. Usam API nova e não
+    compilam contra o código antigo.
+  - O `ScanCacheChaveIntegrationTest` trocou `.invalid` por `127.0.0.1` liberado.
+  - Suíte do Backend: 806 → 838. Vitest: 40 → 45. Containers `backend` e `frontend`
+    rebuildados. RestAssured do dono: 44 / 0 falhas / 2 pulados, depois do conserto do seed
+    do PAY-07 (abaixo).
+- **Ao vivo (8081)** — tabela completa no bug:
+  - `.invalid` com o qa-free: antes 200, 17/100 CRITICAL, cota 10 → 9; depois **422** em
+    0,28 s, cota 10 → 10. Com a cota zerada, continua 422.
+  - `wiremock:9`: antes 200 em 21 s, 29/100 HIGH; depois **422** `TARGET_UNREACHABLE`. No
+    async: antes DONE com nota; depois ERROR com `errorCode`.
+  - Controles: Juice Shop 200 com `httpStatus` 200; `http://wiremock:8080/nao-existe-qa` 200
+    com `httpStatus` 404; `http://2130706433` 403; `quarantine` e `dkim-hostinger`
+    (`.dns-mock.test`) 200, com o resultado das fichas.
+  - Tela (8090): avisos "⚠ O domínio … não foi encontrado no DNS…" e "⚠ O site … não
+    respondeu…".
+- **Contrato do SCAN-13 (dono escreve), detalhado na ficha 18:**
+  - qa-free: `remainingScans` antes; `GET /scan?url=http://nao-existe-qa.invalid` → **422**,
+    `error` `TARGET_NOT_FOUND`, `host` o domínio; `remainingScans` igual depois;
+  - qa-pro: `GET /scan?url=http://wiremock:9` → **422**, `error` `TARGET_UNREACHABLE`, `host`
+    `wiremock`, `message` sem "null";
+  - controle: qa-pro, `http://wiremock:8080/nao-existe-qa` → **200** com `httpStatus` 404.
+- **O que o SCAN-13 prova:** que alvo que não existe ou não responde fica sem laudo e sem
+  nota, e que o domínio inexistente não custa cota. O controle prova que o 422 não pega
+  quem respondeu, mesmo com erro.
+- **Armadilhas do SCAN-13:**
+  - O PLAN-02 zera a cota do qa-free. O 422 continua (vem antes da cota), mas o "igual
+    antes e depois" vira 0 = 0.
+  - A parte B gasta cota, então usa o qa-pro (sem limite).
+  - Afirme o `error`, não só o 422.
+  - `localhost` e nomes internos continuam 403 do SsrfGuard.
+  - Vermelho: a parte A no 8099 (200, 15/100, `httpStatus` 0); a B pede o `backend` no
+    commit `92303a4`.
+- **Fichas que mudaram:**
+  - SCAN-01 (ficha 3): `CERT_TRANSPARENCY` e `CVE` ficam fora do "todo OK", porque o crt.sh
+    falha em parte das rodadas no Docker (502, e o certspotter sempre dá 403). A porta
+    fechada do "ver o vermelho" agora dá 422.
+  - SCAN-05 (ficha 9): `moduleStatus.CVE` = `OK` entra na pré-condição.
+  - UI-02 (revisão no fim das fichas): o host torto leva 422 e a tela não mostra nota, então
+    o spec como está deve ficar vermelho no `contains('/100')`. A correção do spec continua
+    sendo do dono.
+- **Infra:** o seed do PAY-07 passa a renovar a assinatura e o plano a cada carga
+  (`DO UPDATE`), como o do PAY-15. A AUTHORIZED tinha vencido no banco local, e o PAY-07
+  caiu com `EXPIRED`. Local: `docker compose -f env/docker-compose.test.yml up seeder`.
+- **Laterais:** nenhum bug novo de produto. O seed do PAY-07 é infra e entra num commit
+  próprio.
