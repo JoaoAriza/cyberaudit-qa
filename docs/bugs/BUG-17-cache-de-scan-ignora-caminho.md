@@ -1,7 +1,7 @@
 # BUG-17 — Cache de scan ignora caminho e query (e a conta de quem pediu)
 
-Achado lateral em 2026-11-15, ao preparar a ficha do SCAN-03. **Aberto, não corrigido.**
-Formato conforme `../template-bug.md`.
+Achado lateral em 2026-11-15, ao preparar a ficha do SCAN-03. **✅ Corrigido em 2026-11-18**
+(HANDOFF §12, Etapa J). Formato conforme `../template-bug.md`.
 
 ```markdown
 ## Resumo
@@ -40,7 +40,7 @@ busca". A janela é de 2 minutos (`expireAfterWrite`).
    `dbErrorLeakageSuspected` é true (BUG-06).
 3. O scan do qa-pro aparece no histórico do qa-pro.
 
-## Resultado obtido
+## Resultado obtido (antes do fix)
 
 2. Volta em **9 ms** com `url` `http://juice-shop:3000/`, `inputSurfaceDetected` false,
    `dbErrorLeakageSuspected` false. Sozinho, depois de o cache expirar: `url` certa e
@@ -60,25 +60,52 @@ com a conta de quem pediu.
 
 ## Correção
 
-A fazer. Decisões para o dono:
+Decisões do dono (2026-11-18):
 
-- Caminho e query na chave: em todo modo, ou só no ativo (no passivo os módulos olham o
-  host, mas `inputSurfaceDetected` e os headers são da página pedida)?
-- Conta: o cache compartilhado entre contas é de propósito (o gating de plano faz cópia
-  não destrutiva por causa dele). Se continuar compartilhado, o hit precisa gravar o
-  histórico de quem pediu e recalcular as `changes` com a conta dele.
+- **Caminho e query entram na chave em todo modo.** O passivo também busca a página
+  pedida: headers, cookies e tecnologia vêm dela.
+- **A conta entra na chave.** Membros da mesma conta dividem a entrada, porque o histórico
+  é da conta. Visitantes dividem uma entre si; eles não têm histórico.
+
+`buildCacheKey` passa a ser `v4:scan:<conta ou guest>:<endereço>:active=…:lang=…`. O endereço
+é esquema + host + porta + caminho + query. O caminho é normalizado como no histórico
+(`normalizarCaminho`: com e sem barra no fim são o mesmo), e o fragmento `#` fica de fora.
+A porta também não entrava antes: `juice-shop:3000` e `juice-shop:8080` dividiam a entrada.
+
+Efeito lido no código e não reproduzido ao vivo: no ativo, o acerto de outra conta pulava a
+prova de posse por arquivo, que mora no `runScan`. Continuava valendo a trava do controller
+(domínio verificado na conta de quem pede). O seed não tem duas contas com o mesmo domínio
+verificado, então não deu para mostrar. Com a conta na chave, o acerto só serve a quem já
+passou pela prova.
 
 ## Teste de regressão
 
-A escrever junto com a correção. Caso de QA candidato: ativo em `/` e depois na busca, em
-menos de 2 min → o segundo com a `url` pedida e o SQLi.
+- Backend: `ScanCacheChaveIntegrationTest`, com 7 testes, 5 vermelhos contra o código antigo.
+  Nenhum scan de verdade roda. O `SSLService`, primeiro passo do scan, é um mock que lança
+  uma exceção de sinal. Então "lançou" quer dizer "o cache não acertou e o scan começou". Um
+  espião no `ScanCacheService` captura a chave consultada. Os testes cobrem:
+  - a home guardada: a mesma conta na home acerta; a busca e outra conta rodam o scan;
+  - caminho, query, porta e conta mudam a chave; visitante não divide com conta;
+  - controles: sem barra, com barra e com `#` dão a mesma chave; membros da mesma conta e
+    visitantes dividem.
+- Suíte do Backend: 799 → 806, verde.
+- Ao vivo (8081):
+
+  | Passo | Antes | Depois |
+  |---|---|---|
+  | 2. Ativo na busca, logo depois da home | 0,23 s; `url` da home; `dbErrorLeakageSuspected` false | 3 s; `url` termina em `search?q=apple`; `inputSurfaceDetected` e `dbErrorLeakageSuspected` true |
+  | 4. qa-pro na home, logo depois do qa-enterprise | 0,24 s; histórico do qa-pro 4 → 4 | 2,4 s; histórico do qa-pro 4 → 5 |
+  | 5. Controle: o qa-pro de novo na home | 0,23 s (acerto) | 0,23 s (acerto) |
+
+  RestAssured do dono: 44 / 0 falhas / 2 pulados.
+- Caso de QA: **SCAN-12** (P1, 🔲): contrato no HANDOFF §12, Etapa J; ficha 17.
 ```
 
-## O que muda nas fichas enquanto não corrige
+## O que mudou nas fichas com o fix
 
-- **SCAN-03:** afirme que `url` é a pedida antes das flags de sonda. Se outro teste da mesma
-  execução escanear o Juice Shop em modo ativo noutro caminho até 2 min antes, o SCAN-03
-  pega o resultado dele.
-- **Todos os SCAN-*:** o cache dura **2 minutos** (não "até reiniciar o backend", como o
-  HANDOFF dizia) e a chave inclui o idioma. Rodar o mesmo host em pt-BR e em en não pede
-  reinício.
+- **SCAN-03:** a armadilha "outro teste no Juice Shop em modo ativo noutro caminho até 2 min
+  antes entrega o resultado dele" deixou de valer. Afirmar a `url` pedida continua sendo uma
+  boa primeira asserção.
+- **Todos os SCAN-*:** o cache segue com **2 minutos** e com o idioma na chave. Agora ele
+  também separa por endereço e por conta. Repetir o **mesmo** endereço com a **mesma** conta
+  em menos de 2 min ainda devolve o resultado guardado.

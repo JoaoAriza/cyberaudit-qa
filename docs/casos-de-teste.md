@@ -5,7 +5,7 @@ testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogado
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
 Contagem atual (2026-11-17, com os casos acrescentados depois, como o SSRF-07, o
-SCAN-05 a SCAN-11, o UI-04, o PLAN-03 e o PLAN-04): 52 casos — 21 P0, 24 P1, 7 P2.
+SCAN-05 a SCAN-12, o UI-04, o PLAN-03 e o PLAN-04): 53 casos — 21 P0, 25 P1, 7 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -72,6 +72,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SCAN-09 | Motor | Alvo com cinco Set-Cookie (stub `cookies-mock`): sessão PHP sem HttpOnly, `XSRF-TOKEN` sem HttpOnly, `secure_pref` sem flag, `visitante` sem flag, `connect.sid` sem Secure | Em `cookieIssues`: `PHPSESSID` e `connect.sid` HIGH; `secure_pref` LOW com `secure:false`; `visitante` LOW; nenhum `XSRF-TOKEN`. Em `score.issues`, `INSECURE_COOKIES` com `severity` HIGH | RestAssured + WireMock | P1 | 🔲 A fazer — BUG-12 corrigido no Backend (2026-11-12, `bugs/BUG-12-cookies-atributo-por-substring.md`); contrato no HANDOFF §11, Etapa E |
 | SCAN-10 | Pontuação | Alvo só com achados LOW de higiene (stub `pesos-mock`): versão no `Server`, sem Referrer-Policy, sem Permissions-Policy, `/admin/` no robots.txt respondendo 403, sem security.txt | Em `score.notes`: versão exposta e robots.txt `-2`; Referrer-Policy, Permissions-Policy e security.txt `-1`. Os cinco achados em `score.issues` com `severity` LOW | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-14 corrigido no Backend (2026-11-13, `bugs/BUG-14-peso-low-igual-a-medium.md`); contrato no HANDOFF §11, Etapa F |
 | SCAN-11 | Motor | Alvo com `Strict-Transport-Security: max-age=0` (stub `textos-mock`), scan em pt-BR e em en | `headers["Strict-Transport-Security"]` = `WEAK (max-age=0 apaga o HSTS)` em pt-BR e `WEAK (max-age=0 deletes HSTS)` em en | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-15 corrigido no Backend (2026-11-14, `bugs/BUG-15-textos-do-laudo.md`); contrato no HANDOFF §11, Etapa G |
+| SCAN-12 | Motor | Cache de scan: ativo na home e logo depois na busca do Juice Shop (qa-enterprise); passivo num endereço único por execução com o qa-enterprise e logo depois com o qa-pro; controle: o qa-pro repete o endereço | Busca com a `url` pedida e `dbErrorLeakageSuspected` true; `GET /history/juice-shop` do qa-pro com **1** item da `url` única, e ainda 1 depois do controle (acerto do cache) | RestAssured | P1 | 🔲 A fazer — BUG-17 corrigido no Backend (2026-11-18, `bugs/BUG-17-cache-de-scan-ignora-caminho.md`); contrato no HANDOFF §12, Etapa J; ficha 17 |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
 ## Relatório e interface
@@ -529,3 +530,13 @@ Achado lateral registrado e não corrigido: BUG-20. O rate limit por minuto isen
 OWNER, e todo cadastro é OWNER, então nenhuma conta registrada tem limite por minuto. A
 isenção já constava da nota do RATE-01 (2026-10-05) como contrato. A correção pede decisão
 do dono (quanto por minuto em cada plano).
+
+## 2026-11-19 — BUG-17 corrigido (cache de scan por host); SCAN-12 novo
+
+Terceira etapa da rodada dos achados laterais (HANDOFF §12, Etapa J). A chave do cache de
+scan passa a ser conta + endereço completo + modo + idioma. Decisões do dono: caminho e
+query em todo modo, e a conta na chave; membros da mesma conta dividem a entrada, e
+visitantes dividem uma entre si. Regressão no Backend
+(`bugs/BUG-17-cache-de-scan-ignora-caminho.md`). Caso novo SCAN-12 (P1, 🔲).
+
+A armadilha de cache do SCAN-03 (ficha 4) deixou de valer.

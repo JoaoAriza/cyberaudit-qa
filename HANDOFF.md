@@ -536,8 +536,9 @@ nos comandos de commit; a fila do dono vai acumulando no fim desta seção.
   - `openPorts: []` é esperado: o port scan procura portas de risco conhecidas (21, 22,
     3306, 6379...) e a 3000 não está na lista. Não asserte porta aberta.
   - O resultado fica em cache (Caffeine, memória) por **host + modo + idioma, por 2 min**
-    (corrigido em 2026-11-15; antes dizia "por URL + modo"). Caminho e query ficam fora da
-    chave: BUG-17, ver §12. Restart do container também zera.
+    (corrigido em 2026-11-15; antes dizia "por URL + modo"). Caminho, query e conta ficavam
+    fora da chave (BUG-17). Desde 2026-11-18 a chave é conta + endereço completo + modo +
+    idioma (§12, Etapa J). Restart do container também zera.
 - **SCAN-03 continua bloqueado**, por dois motivos que não são o BUG-03:
   - SQLi → **BUG-06** (novo, P1): o probe anexa `'` (`apple'`), o Juice Shop vaza
     `SQLITE_ERROR` e o probe não reconhece (não tem padrão de SQLite do Node).
@@ -630,6 +631,7 @@ lista divergirem, vale a ficha (§12).
 - **SCAN-11** e **UI-04** (BUG-15) — contrato e armadilhas na §11, Etapa G.
 - **PLAN-03** (BUG-18) — contrato na §12, Etapa H; ficha 15.
 - **PLAN-04** (BUG-19) — contrato na §12, Etapa I; ficha 16.
+- **SCAN-12** (BUG-17) — contrato na §12, Etapa J; ficha 17.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -681,8 +683,9 @@ novos desta rodada estão nela.
   `CVE-2013-2220` na lista, issue `CVE_CVE_2013_2220` (MEDIUM) e nota
   `CVE potencial tier HIGH detectado: -6`.
 - **Armadilhas:**
-  - Alvo é o host `php-banner-mock`, não `wiremock`: a chave do cache de scan é o host, e
-    `wiremock` colide com o AUTHZ-01. O stub só responde para esse Host, só na raiz.
+  - Alvo é o host `php-banner-mock`, não `wiremock`: a chave do cache de scan era o host, e
+    `wiremock` colidia com o AUTHZ-01 (até o fix do BUG-17, em 2026-11-18). O stub só
+    responde para esse Host, só na raiz.
   - O fingerprint faz **HEAD**, não GET — por isso o stub é `ANY`. Com GET só, o
     `detectedVersions` volta vazio e o CVE nem é consultado (a asserção negativa passaria
     sem testar nada).
@@ -692,8 +695,8 @@ novos desta rodada estão nela.
     sumir, é o NVD que mudou, não o produto. Não fixe a lista inteira nem o score exato.
   - `score` é um objeto (`score.score`, `score.riskLevel`, `score.notes`, `score.issues`);
     as issues de CVE têm id `CVE_` + o CVE com `_` (`CVE_CVE_2013_2220`).
-  - O cache de scan guarda o resultado do host: para ver o "antes" de novo, reinicie o
-    `backend` (cache em memória).
+  - O cache de scan guarda o resultado por 2 min (por conta e endereço, desde o BUG-17): para
+    ver o "antes" de novo, espere 2 min ou reinicie o `backend` (cache em memória).
 
 ### Etapa B — BUG-09 ✅ corrigido (DKIM da Hostinger e chave revogada) — 2026-11-09
 - **Achado:** conferido no DNS público do domínio do cliente — SPF
@@ -930,7 +933,7 @@ está abaixo e nas fichas.
     timeout: `cveFindings: []` com `moduleStatus.CVE` OK.
   - **BUG-17** (P1) — a chave do cache ignora caminho e query (ativo em `/` e depois na
     busca do Juice Shop devolve o resultado de `/` em 9 ms, sem SQLi) e a conta (outra
-    conta recebe o resultado, que não entra no histórico dela).
+    conta recebe o resultado, que não entra no histórico dela). ✅ corrigido, Etapa J abaixo.
   - **BUG-18** (P1) — conta FREE cria API key: `checkApiKeyAccess` libera `OWNER`, e todo
     cadastro nasce `OWNER`. ~~A tela mostra "disponível no PRO"~~ — errado: a tela tinha a
     mesma regra e mostrava o painel liberado ao FREE (conferido em 2026-11-17).
@@ -1048,3 +1051,48 @@ posição dele na fila também é decisão do dono.
   como contrato. A correção pede decisão do dono: quanto por minuto em cada plano.
 - **Observação:** o nome de chave revogada continua ocupado (`POST /api-keys` com o mesmo
   nome → 409). É mais um motivo para o nome único por execução do PLAN-03.
+
+### Etapa J — BUG-17 ✅ corrigido (cache de scan por host) — 2026-11-19
+- **Decisões do dono (2026-11-18):** (1) caminho e query entram na chave **em todo modo**,
+  porque o passivo também busca a página pedida (headers, cookies e tecnologia vêm dela);
+  (2) a **conta entra na chave**. Membros da mesma conta dividem a entrada, porque o
+  histórico é da conta. Visitantes dividem uma entre si.
+- **Fix (Backend):** `ScanOrchestrator.buildCacheKey` passa a ser
+  `v4:scan:<conta ou guest>:<endereço>:active=…:lang=…`. O endereço é esquema + host + porta +
+  caminho + query, com o caminho normalizado como no histórico e sem o `#`. A porta também
+  não entrava antes. Lido no código: no ativo, o acerto de outra conta pulava a prova de posse
+  por arquivo; com a conta na chave, isso acabou.
+- **Regressão:** `ScanCacheChaveIntegrationTest` (7 testes; 5 vermelhos contra o código
+  antigo). Nenhum scan roda. O `SSLService`, primeiro passo do scan, é um mock que lança uma
+  exceção de sinal ("lançou" = o cache não acertou), e um espião no `ScanCacheService`
+  captura a chave consultada. Suíte do Backend: 799 → 806. Container `backend` rebuildado.
+  RestAssured do dono: 44 / 0 falhas / 2 pulados.
+- **Ao vivo (8081):**
+
+  | Passo | Antes | Depois |
+  |---|---|---|
+  | Ativo na busca, logo depois da home | 0,23 s; `url` da home; SQLi false | 3 s; `url` da busca; SQLi true |
+  | qa-pro na home, logo depois do qa-enterprise | 0,24 s; histórico do qa-pro 4 → 4 | 2,4 s; 4 → 5 |
+  | Controle: mesma conta, mesmo endereço | 0,23 s (acerto) | 0,23 s (acerto) |
+
+- **Contrato do SCAN-12 (dono escreve), detalhado na ficha 17:**
+  - parte A, qa-enterprise, ativo: `/` e logo depois `/rest/products/search?q=apple` → o
+    segundo com `url` = a pedida e `dbErrorLeakageSuspected` true;
+  - parte B, passivo, endereço único `http://juice-shop:3000/?scan12=<nanoTime>`: o
+    qa-enterprise escaneia, o qa-pro escaneia logo depois, e `GET /history/juice-shop` do
+    qa-pro tem **1** item com essa `url`;
+  - controle: o qa-pro repete o endereço, e o histórico continua com **1** item (acerto).
+- **O que o SCAN-12 prova:** que o cache só devolve resultado guardado para o mesmo endereço
+  e a mesma conta. Sem isso, o ativo dá falso negativo no fluxo "home, depois a busca", e o
+  scan de uma conta some do histórico dela. O controle prova que o 1 vem da separação por
+  conta, e não de "cache desligado".
+- **Armadilhas do SCAN-12:**
+  - Conte os itens com a `url` única, não o total: o `/history/{host}` devolve no máximo
+    50, e cada execução deixa uma linha nova em cada conta.
+  - Passe a URL do alvo com `queryParam`: concatenada, a query do alvo vira parâmetro do
+    `/scan`.
+  - Ativo só com o qa-enterprise (dispensa a prova de posse).
+  - Vermelho: o 8099 barra o Juice Shop. O vermelho de verdade pede o `backend` no commit
+    `256670f`; o Claude prepara se o dono pedir.
+- **Fichas:** a armadilha de cache do SCAN-03 (ficha 4) deixou de valer, e a seção 0 das
+  fichas passou a descrever a chave nova.

@@ -39,12 +39,12 @@ opcional. Se quiser essa prova num caso, peça que eu preparo (é infra). Fora i
 uma expectativa uma vez mostra que a asserção sabe falhar.
 
 **Cache de scan.** Corrige o que o HANDOFF dizia:
-- A chave é **host + modo + idioma** e vale **2 minutos**, não "até reiniciar o backend".
-  O mesmo host em pt-BR e em en não pede reinício.
-- Caminho e query **ficam fora da chave** (BUG-17, aberto). `juice-shop:3000/` e
-  `juice-shop:3000/rest/products/search?q=apple` no mesmo modo dividem o resultado por 2 min.
-- Por isso, repetir uma classe de scan em menos de 2 min devolve o resultado guardado. É
-  rápido, mas não testa de novo. Para testar de novo: espere 2 min ou
+- Desde o fix do BUG-17 (2026-11-18), a chave é **conta + endereço completo + modo +
+  idioma** e vale **2 minutos**, não "até reiniciar o backend". O endereço inclui caminho,
+  query e porta; com e sem barra no fim é o mesmo endereço. Visitantes dividem uma entrada
+  entre si. O mesmo host em pt-BR e em en não pede reinício.
+- Repetir o **mesmo** endereço com a **mesma** conta em menos de 2 min devolve o resultado
+  guardado. É rápido, mas não testa de novo. Para testar de novo: espere 2 min ou
   `docker compose -f env/docker-compose.test.yml restart backend`. O restart também zera o
   throttle do 2FA e os rate limits.
 - A tela chama `POST /scan/async?…&refresh=true`, que fura o cache. O UI-04 não sofre com isso.
@@ -83,6 +83,7 @@ ele para o `TestConfig`, mas a decisão é sua.
 | 14 | UI-04 | P2 | `ui-04-dmarc.cy.js` (nova) | O único de tela. Faça junto com a revisão do UI-02 (fim do documento). |
 | 15 | PLAN-03 | P1 | `ApiKeyRevogadaTest` ou classe própria | Entrou em 2026-11-17 (BUG-18). Pode ir logo depois do AUTH-05: mesmo endpoint. |
 | 16 | PLAN-04 | P1 | junto do PLAN-02 ou classe própria | Entrou em 2026-11-17 (BUG-19). Reaproveita a cota gasta do PLAN-02. |
+| 17 | SCAN-12 | P1 | `ScanAtivoJuiceShopTest` ou classe própria | Entrou em 2026-11-19 (BUG-17). Usa o SQLi do SCAN-03: faça depois dele. |
 
 ---
 
@@ -191,7 +192,8 @@ modo ativo existir.
 | XSS | `http://eco-mock:8080/busca?q=apple` | `reflectedXssSuspected` true; issue `REFLECTED_XSS_SUSPECTED` (HIGH) |
 | XSS, controle | `http://eco-escapado-mock:8080/busca?q=apple` | `xssProbePerformed` true **e** `reflectedXssSuspected` false; nenhuma issue `REFLECTED_XSS_SUSPECTED` |
 
-- Em todos, antes das flags: `url` = a URL pedida (por causa do BUG-17).
+- Em todos, antes das flags: `url` = a URL pedida. Era a proteção contra o BUG-17, hoje
+  corrigido; continua sendo a melhor primeira asserção.
 - No controle, o `xssProbePerformed` true é o que separa "a sonda rodou e viu o escape" de
   "a sonda nem rodou". Sem ele, o false passa à toa.
 
@@ -199,10 +201,9 @@ modo ativo existir.
 - O teste atual afirma XSS **e** SQLi no Juice Shop. A parte de XSS está errada ali, e o
   produto está certo: o `/rest/products/search` não ecoa o `q` no servidor (o XSS de busca
   do Juice Shop é DOM, no navegador). Lá, `reflectedXssSuspected` é false.
-- **Cache (BUG-17):** se outro teste da execução escanear o Juice Shop em modo ativo em
-  outro caminho até 2 min antes, o SQLi recebe o resultado dele (`url` errada, SQLi
-  false). Medido: 9 ms, sem sondar. A asserção da `url` transforma esse falso negativo em
-  falha clara.
+- **Cache:** até o fix do BUG-17 (2026-11-18), um ativo noutro caminho do Juice Shop até
+  2 min antes entregava o resultado dele ao SQLi (`url` errada, SQLi false, 9 ms). Hoje só
+  o mesmo endereço com a mesma conta acerta o cache. O SCAN-12 cobre esse cenário.
 - O stub responde só em `/busca` e só para os dois hosts. Outro caminho dá 404 e
   `inputSurfaceDetected` false, e aí as sondas nem rodam.
 - Notas em pt-BR (se for afirmar): "Possível exposição de erro de banco (modo ativo): -15" e
@@ -588,6 +589,58 @@ separada da do 8081.
 
 **Conferido em 2026-11-17.** No 8081: passos 1 e 2 → 402 com as mensagens acima; qa-pro 200
 e 422. No 8099: `/scan` 403 ×10 e 402; passos 1 e 2 → 403 `DOMAIN_BLOCKED`.
+
+---
+
+### 17. SCAN-12 (P1) · acrescentado em 2026-11-19
+
+**O que prova e por quê.** Que o cache de scan só devolve resultado guardado para o mesmo
+endereço e a mesma conta. A chave era só o host (BUG-17). Por 2 minutos, a busca do Juice
+Shop voltava com o scan ativo da home: sem as sondas no parâmetro, sem o SQLi. É falso
+negativo no fluxo natural "escaneia a home, depois a busca". E outra conta recebia o
+resultado sem o scan entrar no histórico dela.
+
+**Preparar.** Nada no ambiente. Para a parte B, gere um endereço único por execução:
+`U = http://juice-shop:3000/?scan12=<System.nanoTime()>`.
+
+**Pedido e afirmar.**
+
+Parte A, endereço (qa-enterprise, ativo):
+1. `GET /scan?url=http://juice-shop:3000/&active=true` → 200. Só prepara o cache.
+2. Logo em seguida, `GET /scan?url=http://juice-shop:3000/rest/products/search?q=apple&active=true`
+   → 200, `url` = a pedida e `dbErrorLeakageSuspected` true.
+
+Parte B, conta (passivo, com o `U`):
+3. qa-enterprise: `GET /scan?url=U` → 200.
+4. qa-pro, logo depois: `GET /scan?url=U` → 200.
+5. qa-pro: `GET /history/juice-shop` → exatamente **1** item com `url` = `U`.
+6. Controle: qa-pro de novo, `GET /scan?url=U`; depois `GET /history/juice-shop` → ainda
+   **1** item com `url` = `U`. O cache continua existindo (mesma conta, mesmo endereço
+   acerta). Então o 1 do passo 5 vem da separação por conta, e não de "cache desligado".
+
+**Armadilhas.**
+- Conte os itens com a `url` = `U`, não o total. O `/history/{host}` devolve no máximo 50
+  itens, e cada execução deixa uma linha nova no qa-pro e no qa-enterprise: o total satura.
+- Passe a URL do alvo com `queryParam("url", ...)`. O RestAssured codifica o `?` e o `&`
+  de dentro dela. Concatenada no caminho, a query do alvo vira parâmetro do `/scan`.
+- No passo 2, afirme a `url` antes da flag: se falhar, a mensagem já diz que o resultado
+  veio de outro endereço.
+- O ativo é só com o qa-enterprise, que é da equipe da plataforma e dispensa a prova de
+  posse. O qa-pro levaria 403 por outro motivo.
+- O passo 1 pode acertar o cache, se outro teste seu fez ativo na home do Juice Shop com o
+  qa-enterprise há menos de 2 min. Não muda nada: ele só prepara.
+- Visitante fica fora: visitantes dividem uma entrada entre si, por decisão do dono.
+- Tempo: o passo 1 leva de 4 a 25 s e o 2 cerca de 3 s. Cabe com folga nos 2 minutos.
+
+**Ver o vermelho.** O 8099 não serve: sem allowlist, ele barra o Juice Shop. O vermelho de
+verdade pede o `backend` buildado no commit `256670f`, o último antes do fix. Se quiser,
+eu preparo (é infra). Medido antes do fix: passo 2 em 0,23 s, com a `url` da home e
+`dbErrorLeakageSuspected` false; passo 4 em 0,24 s, com o resultado do qa-enterprise, e o
+histórico do qa-pro sem a linha nova (o passo 5 daria 0).
+
+**Conferido em 2026-11-18 e 2026-11-19.** Parte A: passo 2 em 3 s, `url` certa,
+`inputSurfaceDetected` e `dbErrorLeakageSuspected` true. Parte B, com o `U` único: 1 item
+do qa-pro depois do passo 4; ainda 1 depois do controle, que voltou em 0,23 s.
 
 ---
 
