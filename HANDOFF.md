@@ -638,6 +638,7 @@ lista divergirem, vale a ficha (§12).
 - **SCAN-13** (BUG-16) — contrato na §12, Etapa K; ficha 18.
 - **RATE-01** (BUG-20) — contrato na §12, Etapa L; ficha 19. O PLAN-02, já escrito, fica
   vermelho com o fix (revisão no fim das fichas).
+- **SCAN-14** (BUG-13) — contrato na §12, Etapa M; ficha 20.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -658,7 +659,7 @@ O nome do cliente fica fora deste repositório (é público e o laudo é confide
 - **E** — Cookies: atributos lidos de verdade (hoje `contains("secure")` no Set-Cookie
   inteiro); cookie de CSRF sem exigir HttpOnly; `connect.sid` como sessão; severidade do
   agregado = a do pior cookie; cookie que não é de sessão → LOW sem desconto. ✅ BUG-12
-  (+ BUG-13 lateral, aberto).
+  (+ BUG-13 lateral; ✅ corrigido na §12, Etapa M).
 - **F** — Pesos por severidade: LOW custa no máximo 2 (versão exposta, robots.txt,
   security.txt, Referrer/Permissions ausentes, sem WAF). Muda a nota de todo scan. ✅ BUG-14
   (o "robots.txt sem desconto quando tudo responde 401/403" foi retirado — ver a Etapa F).
@@ -806,7 +807,7 @@ novos desta rodada estão nela.
 - **Decisão a rever pelo dono:** o agregado HIGH passa a acionar o piso de risco (MEDIUM). O
   cliente (sessão PHP sem HttpOnly) sai risco MEDIUM mesmo com nota alta. Alternativa no BUG-12.
 - **Lateral:** BUG-13 (compliance "Cookies sem SameSite" nunca dispara) — aberto, fora deste
-  commit.
+  commit. ✅ Corrigido na §12, Etapa M.
 - **Infra nova (Claude):** stub `env/wiremock/mappings/cookies.json` e alias `cookies-mock` no
   WireMock + na `SSRF_TEST_ALLOWLIST` do `backend`. Recriar `wiremock` e `backend`.
 - **Contrato do SCAN-09:** qa-pro, `GET /scan?url=http://cookies-mock:8080` (passivo) → 200.
@@ -958,7 +959,8 @@ O dono pediu para corrigir os laterais agora, no ritmo de sempre: um por etapa, 
 no Backend, conferência ao vivo, caso de QA novo na matriz, dono commita. Ordem: **H =
 BUG-18**, que não tinha decisão pendente. Depois vêm o BUG-19 (mesma área, achado na H), o
 BUG-17 e o BUG-16. O 17 e o 16 pedem decisões do dono, listadas em cada bug; o Claude
-traz uma recomendação na vez de cada um. O BUG-13 segue aberto. O BUG-20 (achado na
+traz uma recomendação na vez de cada um. O BUG-13 segue aberto (✅ corrigido depois, na
+Etapa M). O BUG-20 (achado na
 Etapa I) entra na fila. Ele pede decisão do dono (quanto por minuto em cada plano), e a
 posição dele na fila também é decisão do dono.
 
@@ -1244,3 +1246,62 @@ posição dele na fila também é decisão do dono.
 - **Laterais:** nenhum bug novo. Nit no Backend, sem mudança: o javadoc do
   `PlanLimitService.checkActiveScan` ainda diz "OWNER / ADMIN → sempre permitido", e o
   código já não faz isso.
+
+### Etapa M — BUG-13 ✅ corrigido (compliance e card de cookie) — 2026-11-23
+- **Decisões do dono (2026-11-23):**
+  1. o compliance segue o card do cookie: conta todo cookie em que o card lista o
+     problema, inclusive SameSite inválido e cookie de preferência;
+  2. a cobrança de HttpOnly do token CSRF no compliance (achada na leitura, mesma raiz)
+     entra junto, como exceção à regra "lateral vira bug próprio";
+  3. os avisos do card na tela, com o mesmo defeito, entram junto: o Backend manda os
+     códigos e a tela desenha a partir deles.
+- **Fix (Backend):**
+  - `CookieFinding.problems` (campo novo na API): os códigos do veredito do card, que são as
+    chaves do catálogo (`COOKIE_SEM_SECURE`, `COOKIE_SEM_HTTPONLY`, `COOKIE_SEM_SAMESITE`,
+    `COOKIE_SAMESITE_NONE_SEM_SECURE`), na ordem do `issues`.
+  - `ComplianceMappingService`: os três itens de cookie do Art. 49 leem `problems`. Saíram
+    os métodos que refaziam a conta pelas flags.
+- **Fix (Frontend):** `src/cookieAvisos.ts` decide os avisos do card por `problems`. Scan
+  antigo do histórico, sem o campo, usa as flags, agora com `"MISSING"` e com
+  `SameSite=None` só sem Secure.
+- **Regressão:**
+  - `ComplianceCookiesTest` (44): casos nomeados, a regra geral "item do compliance ⇔ card
+    lista o problema" em 17 Set-Cookie, e "código ⇔ texto" nos mesmos 17. O `ScanResult`
+    sai do `CookieSecurityService` real. Contra o código antigo, 16 de 27 vermelhos (os de
+    código não compilam lá).
+  - `cookieAvisos.test.ts` (8). `PesoLowTest` passou a montar o `CookieFinding` com
+    `problems`.
+  - Backend 859 → 903; Vitest 45 → 53; `tsc -b` limpo. Containers `backend` e `frontend`
+    rebuildados.
+- **Infra:** stub novo `env/wiremock/mappings/cookies-csrf.json`: o mesmo host
+  `cookies-mock`, caminho `/so-csrf`, um `XSRF-TOKEN` sem flags. Não pede alias nem
+  allowlist novos. Recarregar o WireMock:
+  `curl -X POST http://localhost:8082/__admin/mappings/reset`.
+- **Ao vivo (8081, qa-pro, pt-BR)** — tabela no bug:
+  - raiz do `cookies-mock`: Art. 49 antes Secure e HttpOnly; depois **+ SameSite**;
+  - `/so-csrf`: antes Secure e **HttpOnly**; depois Secure e **SameSite**;
+  - o mesmo em `en`; nota e placar do compliance iguais;
+  - tela (8090, qa-pro): o card do `XSRF-TOKEN` mostra só "Secure ausente" e "SameSite
+    ausente/None"; o Art. 49 lista Secure e SameSite;
+  - RestAssured do dono: 44 / 1 / 2. A falha é o PLAN-02 (Etapa L), já conhecida.
+- **Contrato do SCAN-14 (dono escreve), detalhado na ficha 20:**
+  - qa-pro, pt-BR: `GET /scan?url=http://cookies-mock:8080/`. Art. 49 (achar por
+    `reference`) contém o item de SameSite e, como controle, o de HttpOnly;
+  - `GET /scan?url=http://cookies-mock:8080/so-csrf`: Art. 49 contém Secure e SameSite e
+    **não** contém HttpOnly; `cookieIssues` = só o `XSRF-TOKEN`, com `problems`
+    `["COOKIE_SEM_SECURE","COOKIE_SEM_SAMESITE"]`.
+- **O que o SCAN-14 prova:** que o relatório de conformidade diz o mesmo que o card do
+  cookie, nos dois sentidos: o item que faltava aparece, e o que sobrava some.
+- **Armadilhas do SCAN-14:**
+  - qa-free e visitante recebem `compliance` null (trava de plano): use o qa-pro;
+  - o texto sai no idioma pedido; o `problems`, não;
+  - não afirme `overallScore` nem o `status` do Art. 49 (já era FAIL);
+  - vermelho: o 8099 barra o `cookies-mock`; o vermelho de verdade pede o `backend` no
+    commit `260074a`.
+- **Laterais:**
+  - **BUG-21** (aberto, P3): o painel "O que está em jogo" chama o `XSRF-TOKEN` de cookie de
+    sessão (`impactIndicators` `COOKIES`/`XSRF-TOKEN`). O `ImpactLabelService` tem a sua
+    própria lista de nomes de sessão, por "contém" (`token`, `sid`, `user`...). O nível não
+    muda: ele vem só dos campos de formulário.
+  - Observação, sem bug: a linha de flags do card continua mostrando "✗ HttpOnly" em
+    vermelho no token CSRF. É a flag crua, não o veredito.

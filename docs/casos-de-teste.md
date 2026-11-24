@@ -4,8 +4,8 @@ Consolida os 26 casos originais do escopo (`CyberAudit QA — Escopo do projeto 
 testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogados em
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
-Contagem atual (2026-11-22, com os casos acrescentados depois, como o SSRF-07, o
-SCAN-05 a SCAN-13, o UI-04, o PLAN-03 e o PLAN-04): 54 casos — 21 P0, 26 P1, 7 P2.
+Contagem atual (2026-11-23, com os casos acrescentados depois, como o SSRF-07, o
+SCAN-05 a SCAN-14, o UI-04, o PLAN-03 e o PLAN-04): 55 casos — 21 P0, 26 P1, 8 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -74,6 +74,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SCAN-11 | Motor | Alvo com `Strict-Transport-Security: max-age=0` (stub `textos-mock`), scan em pt-BR e em en | `headers["Strict-Transport-Security"]` = `WEAK (max-age=0 apaga o HSTS)` em pt-BR e `WEAK (max-age=0 deletes HSTS)` em en | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-15 corrigido no Backend (2026-11-14, `bugs/BUG-15-textos-do-laudo.md`); contrato no HANDOFF §11, Etapa G |
 | SCAN-12 | Motor | Cache de scan: ativo na home e logo depois na busca do Juice Shop (qa-enterprise); passivo num endereço único por execução com o qa-enterprise e logo depois com o qa-pro; controle: o qa-pro repete o endereço | Busca com a `url` pedida e `dbErrorLeakageSuspected` true; `GET /history/juice-shop` do qa-pro com **1** item da `url` única, e ainda 1 depois do controle (acerto do cache) | RestAssured | P1 | 🔲 A fazer — BUG-17 corrigido no Backend (2026-11-18, `bugs/BUG-17-cache-de-scan-ignora-caminho.md`); contrato no HANDOFF §12, Etapa J; ficha 17 |
 | SCAN-13 | Motor | Alvo inexistente ou sem resposta: `http://nao-existe-qa.invalid` (qa-free, cota lida antes e depois); `http://wiremock:9` (resolve, nada escuta na porta); controle: alvo que responde 404 | 1º: **422**, `error` `TARGET_NOT_FOUND`, `host` = o domínio, `remainingScans` igual antes e depois; 2º: **422**, `error` `TARGET_UNREACHABLE`, `host` `wiremock`, `message` sem "null"; controle: 200 com `httpStatus` 404 | RestAssured | P1 | 🔲 A fazer — BUG-16 corrigido no Backend (2026-11-22, `bugs/BUG-16-host-sem-resposta-ganha-nota.md`); contrato no HANDOFF §12, Etapa K; ficha 18 |
+| SCAN-14 | Motor | Compliance (LGPD Art. 49) diz o mesmo que o card do cookie: `cookies-mock:8080/` (três cookies sem SameSite) e `cookies-mock:8080/so-csrf` (só um `XSRF-TOKEN` sem flags), qa-pro, pt-BR | Raiz: Art. 49 com o item "Cookies sem atributo SameSite" (e o de HttpOnly, controle). `/so-csrf`: Art. 49 com Secure e SameSite, **sem** HttpOnly; o `XSRF-TOKEN` com `problems` `["COOKIE_SEM_SECURE","COOKIE_SEM_SAMESITE"]` | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-13 corrigido no Backend e no Frontend (2026-11-23, `bugs/BUG-13-compliance-samesite-nunca-dispara.md`); contrato no HANDOFF §12, Etapa M; ficha 20 |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
 ## Relatório e interface
@@ -582,3 +583,21 @@ na matriz.
 Muda o PLAN-02: o `PlanoCotaScanTest` do dono fica vermelho no 429 da 6ª chamada seguida.
 É o contrato novo; o ritmo do teste é com o dono. Mudam também as fichas do PLAN-04 (ritmo
 do preparar), do SSRF-07 (motivo do qa-pro) e do SCAN-13 (balde do qa-free).
+
+## 2026-11-23 — BUG-13 corrigido (compliance e card de cookie); SCAN-14 novo; BUG-21 aberto
+
+Sexta etapa da rodada dos achados laterais (HANDOFF §12, Etapa M). Decisões do
+dono:
+- o compliance segue o card do cookie: conta todo cookie em que o card lista o problema;
+- a cobrança de HttpOnly do token CSRF no compliance, achada na mesma leitura, entra junto
+  (mesma raiz);
+- os avisos do card na tela, que tinham o mesmo defeito, entram junto: o Backend manda os
+  códigos em `problems`, e a tela desenha a partir deles.
+
+Regressão no Backend e no Frontend (`bugs/BUG-13-compliance-samesite-nunca-dispara.md`).
+Caso novo SCAN-14 (P2, 🔲), com o stub novo `env/wiremock/mappings/cookies-csrf.json`
+(`cookies-mock:8080/so-csrf`). O SCAN-09 não muda: `problems` é campo novo e só acrescenta.
+
+Achado lateral registrado e não corrigido: BUG-21 (P3). O painel "O que está em jogo" chama
+o `XSRF-TOKEN` de cookie de sessão, porque o rótulo de impacto tem a sua própria lista de
+nomes.

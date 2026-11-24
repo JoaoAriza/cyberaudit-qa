@@ -15,6 +15,8 @@ quem escreve é o dono. Os nomes de classe são sugestões.
 - O stub novo do SCAN-03 (`env/wiremock/mappings/eco.json`) e os aliases `eco-mock` e
   `eco-escapado-mock` só valem com os containers recriados:
   `docker compose -f env/docker-compose.test.yml up -d wiremock backend`.
+- O stub do SCAN-14 (`env/wiremock/mappings/cookies-csrf.json`, `cookies-mock:8080/so-csrf`)
+  só vale com o WireMock recarregado: `curl -X POST http://localhost:8082/__admin/mappings/reset`.
 - Depois de reiniciar o Docker, `juice-shop` e `backend-noallowlist` não sobem sozinhos:
   `docker compose -f env/docker-compose.test.yml up -d --no-build juice-shop backend-noallowlist`.
 
@@ -101,6 +103,7 @@ ele para o `TestConfig`, mas a decisão é sua.
 | 17 | SCAN-12 | P1 | `ScanAtivoJuiceShopTest` ou classe própria | Entrou em 2026-11-19 (BUG-17). Usa o SQLi do SCAN-03: faça depois dele. |
 | 18 | SCAN-13 | P1 | `ScanMotorTest` ou classe própria | Entrou em 2026-11-22 (BUG-16). Dois 422 e um controle: faça depois do SCAN-01. |
 | 19 | RATE-01 | P1 | `RateLimitTest` (nova) | Retomado em 2026-11-23 (BUG-20). Pede o balde cheio: rode a classe sozinha depois do restart, ou espere 60 s no começo. |
+| 20 | SCAN-14 | P2 | `LaudoStubsTest` | Entrou em 2026-11-23 (BUG-13). Mesmo stub do SCAN-09: faça depois dele. |
 
 ---
 
@@ -814,6 +817,59 @@ precisam rodar lá.
 **Conferido em 2026-11-23.** No 8081, com `juice-shop:3000` e com `wiremock`: 200×5 e 429
 na 6ª. qa-pro logo depois: 200. 13 s depois: 200; a seguinte: 429. No 8099:
 `juice-shop:3000` 200 nas 8.
+
+---
+
+### 20. SCAN-14 (P2) · acrescentado em 2026-11-23
+
+**O que prova e por quê.** Que o relatório de conformidade (LGPD Art. 49) diz o mesmo que o
+card do cookie. Antes (BUG-13), o item "Cookies sem atributo SameSite" nunca aparecia: o
+compliance procurava SameSite vazio, e a análise de cookies grava `"MISSING"`. E o item de
+HttpOnly cobrava o token CSRF, que o card isenta desde o BUG-12. O cliente lia "sem
+SameSite" no card e nada no relatório de conformidade; lia no card que o token CSRF estava
+certo sem HttpOnly, e o relatório dizia "cookie sem HttpOnly".
+
+**Preparar.** O stub novo (`env/wiremock/mappings/cookies-csrf.json`) só vale com o WireMock
+recarregado: `curl -X POST http://localhost:8082/__admin/mappings/reset` (ou
+`docker compose -f env/docker-compose.test.yml restart wiremock`). Para conferir,
+`curl -i -H "Host: cookies-mock:8080" http://localhost:8082/so-csrf` devolve
+`Set-Cookie: XSRF-TOKEN=qa-csrf; Path=/`.
+
+**Pedido.** qa-pro, `Accept-Language: pt-BR`, `active=false`:
+- A: `GET /scan?url=http://cookies-mock:8080/` (o alvo do SCAN-09);
+- B: `GET /scan?url=http://cookies-mock:8080/so-csrf` (só um `XSRF-TOKEN`, sem flag nenhuma).
+
+**Afirmar.** Em `compliance.lgpdItems`, ache o item com `reference` = `Art. 49` (procure por
+`reference`, não por posição). Em `findings`:
+- A: contém "Cookies sem atributo SameSite — vulneráveis a CSRF". Controle: contém também
+  "Cookies sem flag HttpOnly — acessíveis via JavaScript" (o `PHPSESSID` não tem HttpOnly).
+  É o controle que prova que o item de HttpOnly continua existindo.
+- B: contém "Cookies sem flag Secure — transmitidos em conexões HTTP" e "Cookies sem
+  atributo SameSite — vulneráveis a CSRF", e **não contém** "Cookies sem flag HttpOnly —
+  acessíveis via JavaScript".
+- B, em `cookieIssues`: um cookie só, `name` = `XSRF-TOKEN`, `problems` =
+  `["COOKIE_SEM_SECURE", "COOKIE_SEM_SAMESITE"]`.
+
+**Armadilhas.**
+- **Use o qa-pro.** Para o qa-free e para visitante, `compliance` e `cookieIssues` vêm
+  `null`. É a trava de plano, não bug.
+- **Idioma.** O texto dos `findings` sai no idioma pedido. Mande `Accept-Language: pt-BR`.
+  Em `en`, o de SameSite é "Cookies without the SameSite attribute — exposed to CSRF". O
+  `problems` é código e não muda com o idioma.
+- **A ausência do HttpOnly é só na B.** Na A ele tem de estar lá.
+- **Não afirme `overallScore` nem o `status` do Art. 49.** O Art. 49 já era FAIL pelos
+  itens de Secure e HttpOnly, e o placar ficou igual antes e depois (60 na A, 53 na B).
+- **`problems` é campo novo e só acrescenta.** O SCAN-09 continua valendo como está.
+- **Cache de scan.** A e B são chaves diferentes (o caminho entra na chave desde o BUG-17).
+  Repetir o mesmo endereço em menos de 2 min devolve o resultado guardado, que é o mesmo.
+
+**Ver o vermelho.** O 8099 barra o `cookies-mock` (403, sem allowlist). O vermelho de
+verdade pede o `backend` buildado no commit `260074a`, o último antes do fix. Se quiser, eu
+preparo (é infra). Medido antes do fix: A sem o item de SameSite; B com o de HttpOnly e sem
+o de SameSite.
+
+**Conferido em 2026-11-23.** A: Secure, HttpOnly e SameSite. B: Secure e SameSite, sem
+HttpOnly; `XSRF-TOKEN` com os dois códigos. O mesmo em `en`. qa-free: `compliance` null.
 
 ---
 
