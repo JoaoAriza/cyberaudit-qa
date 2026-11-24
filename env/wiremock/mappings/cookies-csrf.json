@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "ANY",
+    "url": "/so-csrf",
+    "headers": {
+      "Host": { "matches": "cookies-mock(:[0-9]+)?" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "Set-Cookie": "XSRF-TOKEN=qa-csrf; Path=/"
+    },
+    "body": "<!doctype html><html><head><title>cookies-mock /so-csrf</title></head><body><p>Alvo de teste: um token CSRF sem nenhuma flag.</p></body></html>"
+  },
+  "metadata": {
+    "caso": "SCAN-14",
+    "nota": "Mesmo Host do cookies.json (alias cookies-mock), outro caminho. Um cookie so: XSRF-TOKEN sem Secure, sem HttpOnly e sem SameSite. O card lista 'sem Secure' e 'sem SameSite' e nao lista HttpOnly (token CSRF e feito para o JavaScript ler, BUG-12). Esperado depois do BUG-13: no compliance, LGPD Art. 49 com os itens de Secure e de SameSite, sem o de HttpOnly."
+  }
+}
