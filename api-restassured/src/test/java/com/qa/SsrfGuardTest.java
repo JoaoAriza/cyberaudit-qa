@@ -3,9 +3,9 @@ package com.qa;
 import io.restassured.http.ContentType;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -97,8 +97,8 @@ public class SsrfGuardTest extends TestConfig {
     }
 
     @Test
-    @Disabled("BUG-02: guard nao normaliza 0x7f000001; reativar quando corrigido -> deve ser 403")
-    void deveBloquarFormatoHexadecimalLoopback() {
+    @DisplayName("SSRF-03: deve bloquear formato Hexadecimal")
+    void deveBloquearFormatoHexadecimalLoopback() {
         String token = tokenQaPro();
 
         given()
