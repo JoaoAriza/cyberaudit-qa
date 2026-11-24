@@ -18,7 +18,7 @@ quem escreve é o dono. Os nomes de classe são sugestões.
 - Depois de reiniciar o Docker, `juice-shop` e `backend-noallowlist` não sobem sozinhos:
   `docker compose -f env/docker-compose.test.yml up -d --no-build juice-shop backend-noallowlist`.
 
-**Ver o vermelho dos quatro casos de segurança.** O `backend-noallowlist` (8099,
+**Ver o vermelho dos cinco casos de segurança.** O `backend-noallowlist` (8099,
 `base.uri.noAllowlist`) roda uma imagem de antes da rodada de bugs. Conferido hoje:
 
 | Caso | No 8081 (corrigido) | No 8099 (imagem antiga) |
@@ -27,6 +27,7 @@ quem escreve é o dono. Os nomes de classe são sugestões.
 | SSRF-07 | 403 `DOMAIN_BLOCKED` | **200** com `127.0.0.1:8081` e com `127.0.0.1#` |
 | AUTH-05 | chave válida → 200 | chave válida → **401** (BUG-01) |
 | AUTH-04 | código repetido → 422 | código repetido → **200** (BUG-04) |
+| RATE-01 | qa-free, `verify-check` de `juice-shop:3000`: 429 na 6ª | **200** nas 8 (BUG-20) |
 
 Rode cada um desses uma vez contra o 8099, veja falhar e volte para o 8081. **Só depois**
 rebuilde o 8099 (`up -d --build backend-noallowlist`): o rebuild apaga esse vermelho. Os
@@ -48,6 +49,18 @@ uma expectativa uma vez mostra que a asserção sabe falhar.
   `docker compose -f env/docker-compose.test.yml restart backend`. O restart também zera o
   throttle do 2FA e os rate limits.
 - A tela chama `POST /scan/async?…&refresh=true`, que fura o cache. O UI-04 não sofre com isso.
+
+**Rate limit por minuto** (desde o fix do BUG-20, 2026-11-23).
+- Vale o plano da conta: qa-free 5/min, qa-pro 60/min. O qa-enterprise está em
+  `PLATFORM_STAFF_EMAILS` e fica isento. Visitante: 5/min por IP, e todo teste sai do mesmo
+  IP.
+- Um balde por usuário, o mesmo para `/scan`, `/scan/async`, `/scan/report`,
+  `/scan/report/pdf`, `/api-keys/ci` e `/scan/verify-check`. Ele repõe 1 ficha a cada
+  60/limite segundos: 12 s no FREE, 1 s no PRO.
+- O 429 vem antes da cota e não gasta scan. Laço com o qa-free que faz mais de 5 chamadas
+  seguidas tem de esperar e repetir (PLAN-02, PLAN-04). O scan repetido em menos de 2 min
+  volta do cache e é rápido, mas passa pelo rate limit do mesmo jeito.
+- O restart do backend zera os baldes.
 
 **Lendo o resultado do scan.**
 - `score` é um objeto: `score.score`, `score.riskLevel`, `score.notes` (lista de texto) e
@@ -87,6 +100,7 @@ ele para o `TestConfig`, mas a decisão é sua.
 | 16 | PLAN-04 | P1 | junto do PLAN-02 ou classe própria | Entrou em 2026-11-17 (BUG-19). Reaproveita a cota gasta do PLAN-02. |
 | 17 | SCAN-12 | P1 | `ScanAtivoJuiceShopTest` ou classe própria | Entrou em 2026-11-19 (BUG-17). Usa o SQLi do SCAN-03: faça depois dele. |
 | 18 | SCAN-13 | P1 | `ScanMotorTest` ou classe própria | Entrou em 2026-11-22 (BUG-16). Dois 422 e um controle: faça depois do SCAN-01. |
+| 19 | RATE-01 | P1 | `RateLimitTest` (nova) | Retomado em 2026-11-23 (BUG-20). Pede o balde cheio: rode a classe sozinha depois do restart, ou espere 60 s no começo. |
 
 ---
 
@@ -122,7 +136,8 @@ O guard lia `127.0.0.1:8081` como "não resolve, deixa passar", e o cliente HTTP
 bater na rede interna.
 
 **Preparar.** Nada. Use o token do qa-pro: visitante tem 5 req/min por IP, e a 6ª variante
-já levaria 429. O qa-pro é `OWNER` e não tem limite por minuto.
+já levaria 429. Desde o fix do BUG-20 (2026-11-23), o limite segue o plano. O qa-pro (PRO)
+tem 60/min, e as 8 chamadas cabem. O qa-free (FREE) tem 5/min, como o visitante.
 
 **Pedido.** `GET /scan/verify-check?host=<h>`. O parâmetro é `host`, não `url`.
 
@@ -569,6 +584,11 @@ pulava o "requer PRO" (BUG-19).
 do qa-free, repetido até vir 402 (no máximo 11 chamadas). Repita até o 402 em vez de contar
 10, porque a cota pode já estar gasta (o PLAN-02 gasta a mesma).
 
+Desde o fix do BUG-20 (2026-11-23), o qa-free tem 5 req/min. Um `429` no meio do preparar
+não gasta cota: espere 12 s e repita a mesma chamada, sem contar como uma das 11. O
+primeiro scan leva uns 20 s; os seguintes voltam do cache em menos de 1 s e esvaziam o
+balde. O preparar leva cerca de 1 min e 30 s.
+
 **Pedido e afirmar.**
 1. qa-free: `GET /api-keys/ci?url=http://wiremock:8080/health&threshold=0` → **402**,
    `message` começando por "Limite diário de 10 scans atingido.".
@@ -589,9 +609,13 @@ do qa-free, repetido até vir 402 (no máximo 11 chamadas). Repita até o 402 em
   o qa-free fica sem scan até a meia-noite ou até
   `docker compose -f env/docker-compose.test.yml restart backend`. Deixe-o por último, ou
   na mesma classe do PLAN-02.
-- Não afirme o rate limit do gate. As três contas do seed são `OWNER`, e `OWNER` passa
-  direto pelo limite por minuto (BUG-20, aberto). O rate limit do gate está coberto no
-  Backend com um membro de equipe.
+- **Espere 13 s antes do passo 1 e de novo antes do passo 2.** O gate também passa pelo
+  rate limit, antes da cota e da trava de plano. O preparar deixa o balde do qa-free
+  vazio: sem esperar, o passo 1 dá 429 em vez de 402.
+- Não afirme o rate limit do gate aqui. Desde o fix do BUG-20 daria para afirmar com o
+  qa-free, mas quem cobre o limite por minuto é o RATE-01, e misturar os dois deixa o caso
+  frágil. O gate está coberto no Backend (`ApiKeyCiGateLimitesIntegrationTest`, membro de
+  conta FREE).
 - Não peça ativo no controle PRO: o qa-pro não tem domínio verificado na conta, e daria 403
   `ACCOUNT_DOMAIN_NOT_VERIFIED` por outro motivo.
 
@@ -603,6 +627,11 @@ separada da do 8081.
 
 **Conferido em 2026-11-17.** No 8081: passos 1 e 2 → 402 com as mensagens acima; qa-pro 200
 e 422. No 8099: `/scan` 403 ×10 e 402; passos 1 e 2 → 403 `DOMAIN_BLOCKED`.
+
+**Conferido em 2026-11-23 (rate limit novo).** Preparar em 90 s: o 1º scan levou 23 s, as 5
+seguintes passaram, e daí em diante veio um 429 a cada chamada, com 12 s de espera; a 11ª
+deu 402. Passo 1 logo depois do preparar: 429. Com 13 s de espera: 402. Passo 2, mais
+13 s: 402.
 
 ---
 
@@ -697,6 +726,10 @@ Controle (qa-pro):
   O caso continua valendo: um 402 no passo 2 seria o vermelho. Para ver o "igual antes e
   depois" com um número diferente de zero, rode antes do PLAN-02 ou depois de reiniciar o
   backend (a cota é em memória).
+- **Balde do qa-free.** Desde o fix do BUG-20 (2026-11-23), o qa-free tem 5 req/min, e o
+  balde é o mesmo do `/scan`, do `/api-keys/ci` e do `verify-check`. Logo depois do
+  PLAN-02, do PLAN-04 ou do RATE-01, ele pode estar vazio, e o passo 2 dá 429 em vez de 422.
+  Espere 13 s antes do passo 2. O `/auth/me` não passa pelo rate limit.
 - **A parte B gasta cota.** Foi decisão do dono: só se descobre que o site não responde
   tentando conectar. Por isso a parte B usa o qa-pro, que não tem limite diário
   (`remainingScans` null). Com o qa-free de cota zerada, o `wiremock:9` dá 402 antes de
@@ -725,6 +758,65 @@ Controle (qa-pro):
 
 ---
 
+### 19. RATE-01 (P1) · retomado em 2026-11-23
+
+**O que prova e por quê.** Que conta registrada tem limite por minuto, pelo plano. Antes
+(BUG-20), o limite isentava o papel `OWNER`, e todo cadastro sai `OWNER`: o qa-free fez 12
+chamadas no mesmo minuto sem um 429. O `verify-check` faz uma requisição de saída e não tem
+cota diária. Sem o limite, qualquer conta grátis fazia a plataforma bater num host quantas
+vezes quisesse. O caso prova também duas coisas:
+- o limite volta sozinho, sem reinício: depois da reposição, a chamada passa;
+- o balde é por usuário: o 429 de um não trava o outro, mesmo saindo do mesmo IP (todo
+  teste sai do mesmo IP).
+
+**Preparar.** O balde do qa-free precisa estar cheio. Ele é o mesmo do `/scan`,
+`/scan/async`, `/scan/report`, `/api-keys/ci` e `/scan/verify-check`, e enche de novo depois
+de 1 min sem uso (1 ficha a cada 12 s). Dois jeitos, a escolha é sua:
+- rodar a classe sozinha logo depois de
+  `docker compose -f env/docker-compose.test.yml restart backend`;
+- esperar 60 s no começo da classe. A ordem das classes no Maven não é garantida, então
+  "rodar antes do PLAN-02" não basta sem fixar a ordem.
+
+**Pedido e afirmar.** `GET /scan/verify-check?host=juice-shop:3000`, uma chamada atrás da
+outra. Passe o host com `.queryParam("host", ...)`.
+1. qa-free, chamadas 1 a 5 → **200**, `verified` false.
+2. qa-free, 6ª → **429**:
+   - `error` = `429 TOO_MANY_REQUESTS`;
+   - `message` começa por "Muitas requisições.".
+3. Controle, logo depois: o mesmo pedido com o token do qa-pro → **200**.
+4. Espere 13 s. qa-free → **200**: uma ficha foi reposta.
+5. Logo em seguida, qa-free → **429** de novo.
+
+O `juice-shop:3000` é o mesmo controle do SSRF-07, e é ele que dá o vermelho no 8099. O
+`wiremock` também serve no 8081, mas o 8099 o barra com 403 já na 1ª chamada.
+
+**Armadilhas.**
+- **O balde é um só para tudo que dispara scan ou requisição de saída.** Um `/scan` do
+  qa-free 5 s antes do passo 1 deixa 4 fichas. A 5ª chamada daria 429, e o caso cairia sem
+  bug. É por isso que o preparar importa.
+- **Espere entre 13 e 20 s no passo 4.** O FREE repõe 1 ficha a cada 12 s, de forma
+  contínua. Com 12 s cravados, um atraso de milissegundos dá 429. Com 24 s ou mais, já são
+  2 fichas, e o passo 5 daria 200.
+- **A `message` sai em português mesmo com `Accept-Language: en`.** Hoje é assim em toda
+  mensagem desse tipo. Afirme o `error` e o começo da `message`, não o texto inteiro.
+- **Não há `Retry-After` no 429.** Não afirme cabeçalho.
+- **O qa-enterprise não serve de controle de limite.** Ele está em
+  `PLATFORM_STAFF_EMAILS` e fica isento. O qa-pro serve: tem 60/min, e uma chamada não
+  chega perto.
+- **Visitante não serve para o caso.** O balde dele é por IP, e todo teste sem token sai
+  do mesmo IP.
+
+**Ver o vermelho.** `base.uri.noAllowlist` (8099, imagem antiga): as chamadas seguem 200
+(conferido até a 8ª), e o passo 2 falha com "expected 429 but was 200". O `juice-shop:3000`
+passa lá porque o 8099 não tem o fix do BUG-05 (host com porta). O controle e a espera não
+precisam rodar lá.
+
+**Conferido em 2026-11-23.** No 8081, com `juice-shop:3000` e com `wiremock`: 200×5 e 429
+na 6ª. qa-pro logo depois: 200. 13 s depois: 200; a seguinte: 429. No 8099:
+`juice-shop:3000` 200 nas 8.
+
+---
+
 ## Revisão: o UI-02 está verde sem testar o que diz (achado 2026-11-15)
 
 Achado ao montar a ficha do UI-04. **É o seu teste, não o produto.** Não mexi nele.
@@ -744,3 +836,26 @@ Achado ao montar a ficha do UI-04. **É o seu teste, não o produto.** Não mexi
   O spec como está deve falhar no `cy.contains('/100')` (linha 17), depois dos 60 s do
   timeout. É o vermelho verdadeiro, e a correção continua a mesma. Não rodei o spec. O
   aviso eu conferi na tela com `nao-existe-qa.invalid`.
+
+---
+
+## Revisão: o PLAN-02 fica vermelho depois do BUG-20 (2026-11-23)
+
+**É o contrato novo, não regressão.** O teste é seu; não mexi nele.
+
+- **O quê.** O `PlanoCotaScanTest.deveBloquearScanAoAtingirCotaDiariaFree` faz até 15
+  `GET /scan` seguidos com o qa-free e espera 403 em cada um até o 402. Desde o fix do
+  BUG-20, o FREE tem 5 requisições por minuto. Rodei a suíte em 2026-11-23: 44 / 1 falha /
+  2 pulados. A falha é essa: "Tentativa 6 era esperado 403 … but was: <429>".
+- **Por que não é bug.** O rate limit vem antes da cota, então o 429 não gasta scan. O caso
+  continua provando a mesma coisa: a 11ª chamada que passa do rate limit dá 402. Só não dá
+  mais para fazer as 11 em sequência.
+- **O que mudar (a direção; a forma é sua).** Tratar o 429 como "espere e repita a mesma
+  chamada", sem contar como tentativa. O ritmo possível é 5 de uma vez e depois 1 a cada
+  12 s, então as 10 da cota mais a do 402 levam cerca de 1 min e 10 s. Uma asserção a mais,
+  se quiser: o `remainingScans` do `/auth/me` não muda com o 429 (o `/auth/me` não passa
+  pelo rate limit).
+- **Junto com o PLAN-04.** O preparar do PLAN-04 gasta a mesma cota, no mesmo ritmo. Na
+  mesma classe, o PLAN-04 reaproveita a cota gasta do PLAN-02 e só precisa de ficha no
+  balde para os passos 1 e 2 (ficha 16).
+- **Na matriz:** o PLAN-02 foi de ✅ para ⚠️ até a correção.

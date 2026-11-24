@@ -39,10 +39,10 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | ID | Área | Cenário | Resultado esperado | Ferramenta | Prioridade | Status |
 |---|---|---|---|---|---|---|
 | PLAN-01 | Planos | Usuário Free solicita relatório PDF | Bloqueado (recurso Pro) | RestAssured, Cypress | P0 | ✅ Passou — RestAssured (2026-10-09) e Cypress (2026-10-26; Free: botão PDF desabilitado + title "Exportar PDF requer plano PRO ou superior"; controle positivo Pro habilitado) |
-| PLAN-02 | Planos | Exceder a cota de scans do plano | Bloqueado com mensagem clara | RestAssured | P1 | ✅ Passou — RestAssured (2026-10-10) |
+| PLAN-02 | Planos | Exceder a cota de scans do plano | Bloqueado com mensagem clara | RestAssured | P1 | ⚠️ Vermelho desde 2026-11-23 — passou no RestAssured (2026-10-10). Com o fix do BUG-20, o qa-free tem 5 req/min, e o `PlanoCotaScanTest` leva 429 na 6ª chamada seguida ("Tentativa 6 … but was: <429>"). É o contrato novo, não regressão. O ritmo do teste é com o dono (`fichas-da-fila.md`, revisão do PLAN-02) |
 | PLAN-03 | Planos | Conta FREE (dona da conta, como todo cadastro) tenta criar API key; controle com conta PRO | FREE → 402 "API Keys requerem plano PRO ou Empresa."; PRO → 201 com `plainKey` (e revogar) | RestAssured | P1 | 🔲 A fazer — BUG-18 corrigido no Backend e no Frontend (2026-11-17, `bugs/BUG-18-free-cria-api-key.md`); contrato no HANDOFF §12, Etapa H |
 | PLAN-04 | Planos | Gate de CI (`GET /api-keys/ci`) com a cota do dia gasta e pedindo scan ativo numa conta FREE; controle com conta PRO | Cota gasta → 402 "Limite diário de 10 scans atingido.…"; ativo no FREE → 402 "Scan ativo requer plano PRO ou superior."; PRO → 200 (`threshold=0`) e 422 (`threshold=100`) | RestAssured | P1 | 🔲 A fazer — BUG-19 corrigido no Backend (2026-11-17, `bugs/BUG-19-gate-de-ci-sem-cota.md`); contrato no HANDOFF §12, Etapa I |
-| RATE-01 | Rate limit | Exceder o limite configurado por usuário/IP | 429; volta a 200 após a janela | RestAssured | P1 | ⏸️ Adiado — decisão B tomada (ver nota 2026-10-05); BUG-20 (2026-11-17): a isenção do OWNER vale para todo cadastro, aberto |
+| RATE-01 | Rate limit | Exceder o limite por minuto do plano: qa-free (FREE, 5/min) no `GET /scan/verify-check`; controle com o qa-pro logo depois | Chamadas 1–5 → 200; 6ª → 429 `429 TOO_MANY_REQUESTS`; qa-pro → 200 (balde por usuário); 13 s depois → 200 e a seguinte 429 | RestAssured | P1 | 🔲 A fazer — BUG-20 corrigido no Backend (2026-11-23, `bugs/BUG-20-rate-limit-isenta-todo-cadastro.md`); retomado com o qa-free, sem a decisão B; contrato no HANDOFF §12, Etapa L |
 
 ## Anti-SSRF
 
@@ -188,6 +188,11 @@ inobservável como guest.
 RPM 60; o 61º request → 429 e, com o refill ~1 token/seg, o próximo ~1-2s depois →
 200 (testa os dois lados). Exige alteração no `seed.sql` (infra) + ~61 requests no
 teste. **Retomar depois** — foco atual é Postman, RestAssured e iniciar o Cypress.
+
+**Superado em 2026-11-23 (BUG-20).** A isenção do OWNER era bug: todo cadastro é OWNER.
+Com o fix, o limite segue o plano (FREE 5/min), e o qa-free mostra o 429 no
+`verify-check`, que não tem cota diária. A decisão B (semear membro de equipe) não é mais
+necessária.
 
 ## 2026-10-05 — AUTH-05 vira bug (API key quebrada)
 
@@ -561,3 +566,19 @@ correção do spec com o dono.
 
 Infra: o seed do PAY-07 passa a renovar a assinatura a cada carga, como o do PAY-15. A
 AUTHORIZED tinha vencido no banco local, e o PAY-07 caiu com `EXPIRED`.
+
+## 2026-11-23 — BUG-20 corrigido (rate limit isentava todo cadastro); RATE-01 retomado
+
+Quinta etapa da rodada dos achados laterais (HANDOFF §12, Etapa L). Decisões do dono:
+- requisições por minuto pelo plano efetivo da conta: FREE 5, PRO 60, ENTERPRISE 120
+  (visitante segue com 5 por IP);
+- membro de equipe segue o plano da conta, não o papel;
+- a equipe da plataforma fica isenta.
+
+Regressão no Backend (`bugs/BUG-20-rate-limit-isenta-todo-cadastro.md`). O RATE-01 sai do
+⏸️ e vira 🔲, com o qa-free e sem seed novo. A contagem não muda (54): o RATE-01 já estava
+na matriz.
+
+Muda o PLAN-02: o `PlanoCotaScanTest` do dono fica vermelho no 429 da 6ª chamada seguida.
+É o contrato novo; o ritmo do teste é com o dono. Mudam também as fichas do PLAN-04 (ritmo
+do preparar), do SSRF-07 (motivo do qa-pro) e do SCAN-13 (balde do qa-free).

@@ -234,6 +234,7 @@ cartão". Isso deixa claro o valor do caso (e ajuda no CV). Mantido pelos próxi
   **PAY-10** (job de expiração — precisa semear `currentPeriodEnd` vencido e disparar o
   job; confirmar se dá sem endpoint de teste novo).
 - **RATE-01** — adiado, decisão B (semear usuário não-OWNER; ver nota na matriz).
+  Retomado em 2026-11-23 com o qa-free, sem seed novo: §12, Etapa L.
 - **SCAN-*** bloqueados pelo BUG-03.
 - **Cypress:** specs de UI (UI-01 login 2FA, UI-02 scan+histórico, UI-03, PAY-11/12).
 - **Fase 6 (CI):** Newman + Maven no GitHub Actions, checkout dos 3 repos lado a lado,
@@ -502,7 +503,9 @@ nos comandos de commit; a fila do dono vai acumulando no fim desta seção.
   público) faz o servidor bater na rede interna. Contrato confirmado ao vivo:
   - `GET /scan/verify-check?host=<h>` — parâmetro `host`, não `url`. Sem token funciona,
     mas visitante tem 5 req/min por IP (a 6ª variante já dá 429); qa-pro é `OWNER` no
-    seed e `OWNER` não tem limite por minuto → use o token dele.
+    seed e `OWNER` não tem limite por minuto → use o token dele. (Desde a Etapa L da §12,
+    o limite segue o plano: o qa-pro tem 60/min e as variantes cabem. A escolha continua,
+    o motivo mudou.)
   - `127.0.0.1:8081`, `localhost:8081`, `169.254.169.254:80`, `[::1]:443`, `127.0.0.1/`,
     `127.0.0.1#`, `127.0.0.1 ` → **403** `{"error":"DOMAIN_BLOCKED"}`.
   - Controle: `example.com:443` → **200** `{"verified":false,...}` (porta em host público
@@ -633,6 +636,8 @@ lista divergirem, vale a ficha (§12).
 - **PLAN-04** (BUG-19) — contrato na §12, Etapa I; ficha 16.
 - **SCAN-12** (BUG-17) — contrato na §12, Etapa J; ficha 17.
 - **SCAN-13** (BUG-16) — contrato na §12, Etapa K; ficha 18.
+- **RATE-01** (BUG-20) — contrato na §12, Etapa L; ficha 19. O PLAN-02, já escrito, fica
+  vermelho com o fix (revisão no fim das fichas).
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -1043,7 +1048,8 @@ posição dele na fila também é decisão do dono.
   - A cota é em memória: depois do caso, o qa-free fica sem scan até a meia-noite ou o
     `restart backend`. Vale o mesmo para o PLAN-02, que gasta a mesma cota.
   - O rate limit do gate não dá para afirmar com o seed: todas as contas são OWNER
-    (BUG-20).
+    (BUG-20). ✅ Corrigido na Etapa L: o qa-free leva 429 na 6ª chamada do minuto, e quem
+    cobre é o RATE-01.
   - Vermelho: no 8099, os dois 402 viram 403 `DOMAIN_BLOCKED`. O 8099 entra na lista dos
     vermelhos a ver antes do rebuild dele (SSRF-03 hex, SSRF-07, AUTH-05, AUTH-04, PLAN-03,
     PLAN-04).
@@ -1051,6 +1057,7 @@ posição dele na fila também é decisão do dono.
   todo cadastro é OWNER. Conferido no `verify-check`: visitante leva 429 na 6ª chamada do
   minuto, e o qa-free fica em 200 nas doze. A isenção estava na nota do RATE-01 (2026-10-05)
   como contrato. A correção pede decisão do dono: quanto por minuto em cada plano.
+  ✅ corrigido, Etapa L abaixo.
 - **Observação:** o nome de chave revogada continua ocupado (`POST /api-keys` com o mesmo
   nome → 409). É mais um motivo para o nome único por execução do PLAN-03.
 
@@ -1174,3 +1181,66 @@ posição dele na fila também é decisão do dono.
   caiu com `EXPIRED`. Local: `docker compose -f env/docker-compose.test.yml up seeder`.
 - **Laterais:** nenhum bug novo de produto. O seed do PAY-07 é infra e entra num commit
   próprio.
+
+### Etapa L — BUG-20 ✅ corrigido (rate limit isentava todo cadastro) — 2026-11-23
+- **Decisões do dono (2026-11-23):**
+  1. requisições por minuto pelo plano efetivo: FREE 5, PRO 60, ENTERPRISE 120 (visitante
+     segue com 5 por IP);
+  2. membro de equipe segue o plano da conta, não o papel;
+  3. a equipe da plataforma (`PLATFORM_STAFF_EMAILS`) fica isenta.
+- **Fix (Backend, `RateLimitService`):**
+  - O limite sai do `PlanLimitService.effectivePlan(user)`, a mesma fonte da cota diária. A
+    isenção é `isPlatformStaff(user)`. Saíram a isenção do `OWNER` e os limites por papel.
+  - `rpmDoPlano` é um `switch` sem `default`: plano novo no enum não compila sem limite.
+  - O limite entra na chave do balde (`user:<id>:<limite>`): quem troca de plano usa o
+    balde novo na próxima requisição.
+  - O limite genérico do billing não mudou.
+- **Regressão:**
+  - `RateLimitPorPlanoIntegrationTest`: 8 testes pelo `/scan/verify-check` e pelo `/scan`,
+    com alvo `127.0.0.1` (403 = passou, 429 = barrou; nada sai da máquina). Contra o código
+    antigo, 6 vermelhos e 2 controles verdes nos dois (equipe isenta, visitante 5/IP).
+  - `RateLimitServiceTest`: 13 testes de unidade, com contagem exata. Usa o construtor novo
+    e não compila contra o código antigo.
+  - `ApiKeyCiGateLimitesIntegrationTest.rateLimitValeNoGate` passou a usar um membro de
+    conta FREE (a 6ª no gate dá 429), no lugar do membro de conta ENTERPRISE a 60/min.
+  - Suíte do Backend: 838 → 859. Frontend sem mudança. Container `backend` rebuildado.
+- **Ao vivo (8081)** — tabela completa no bug:
+  - qa-free no `verify-check`: antes 200 nas 12; depois 200×5 e 429 na 6ª. O `/scan` logo
+    depois também leva 429, com a cota 10/10 intacta.
+  - qa-pro: antes 200 nas 65; depois 429 na 61ª (75 chamadas em 1,2 s, num curl só).
+  - qa-enterprise (equipe): 200 nas 150. Visitante: igual, 429 na 6ª.
+  - As rajadas precisam de um curl só, com várias URLs: um curl por chamada leva ~150 ms no
+    Windows, e o PRO repõe 1 ficha por segundo.
+- **RestAssured do dono: 44 / 1 falha / 2 pulados.** A falha é o PLAN-02
+  (`PlanoCotaScanTest`): "Tentativa 6 era esperado 403 … but was: <429>". É o contrato
+  novo. A correção é do dono: tratar o 429 como "espere 12 s e repita", sem contar como
+  tentativa. Revisão no fim das fichas; na matriz, o PLAN-02 foi de ✅ para ⚠️.
+- **Contrato do RATE-01 (dono escreve), detalhado na ficha 19:**
+  - pré-condição: balde do qa-free cheio (restart do backend, ou 60 s sem chamada dele);
+  - qa-free, `GET /scan/verify-check?host=juice-shop:3000` → 200 nas 5 primeiras, **429**
+    na 6ª (`error` `429 TOO_MANY_REQUESTS`, `message` começando por "Muitas requisições.");
+  - controle: qa-pro, logo depois → 200 (balde por usuário, mesmo IP);
+  - 13 s depois → 200; a seguinte → 429.
+- **O que o RATE-01 prova:** que conta registrada tem limite por minuto, que ele volta
+  sozinho, e que o 429 de um usuário não trava outro. Sai do ⏸️ sem a decisão B de
+  2026-10-05: o `verify-check` não tem cota diária, então o qa-free não colide com nada.
+- **Armadilhas do RATE-01:**
+  - Um balde só para `/scan`, `/scan/async`, `/scan/report`, `/api-keys/ci` e
+    `verify-check`: qualquer chamada do qa-free logo antes rouba ficha.
+  - Espera entre 13 e 20 s (12 s cravados pode dar 429; 24 s já são 2 fichas).
+  - A `message` sai em português mesmo com `Accept-Language: en`; sem `Retry-After`.
+  - O qa-enterprise é isento (equipe), não serve de controle de limite.
+  - Vermelho: no 8099, `juice-shop:3000` dá 200 nas 8 (o 8099 não tem o fix do BUG-05). O
+    `wiremock` não serve lá (403 já na 1ª). O 8099 entra na lista dos vermelhos a ver antes
+    do rebuild dele.
+- **Fichas que mudaram:**
+  - seção 0: bloco novo "Rate limit por minuto", e o RATE-01 na tabela do 8099;
+  - SSRF-07 (ficha 2): continua com o qa-pro, por outro motivo (60/min cabem as 8);
+  - PLAN-04 (ficha 16): o preparar trata o 429 como "espere e repita"; 13 s antes dos
+    passos 1 e 2. Conferido: o preparar levou 90 s; sem a espera, o passo 1 deu 429; com
+    ela, 402;
+  - SCAN-13 (ficha 18): 13 s antes do passo 2 se o qa-free acabou de passar por outro caso;
+  - ficha 19 nova (RATE-01) e a revisão do PLAN-02 no fim.
+- **Laterais:** nenhum bug novo. Nit no Backend, sem mudança: o javadoc do
+  `PlanLimitService.checkActiveScan` ainda diz "OWNER / ADMIN → sempre permitido", e o
+  código já não faz isso.
