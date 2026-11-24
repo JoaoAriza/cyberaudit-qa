@@ -54,7 +54,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SSRF-04 | Anti-SSRF | Hostname público que resolve para IP privado | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; hostnames via extra_hosts → IP privado, CI-safe) |
 | SSRF-05 | Anti-SSRF | Alvo externo que redireciona para IP interno | Redirecionamento não seguido | RestAssured + WireMock | P1 | ✅ Passou — RestAssured (2026-10-12; redirect 302→interno não seguido, bloqueio no hop) |
 | SSRF-06 | Anti-SSRF | Allowlist de teste fora do profile `test` | Allowlist inexistente | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; backend 8099 sem profile, juice-shop/wiremock → 403) |
-| SSRF-07 | Anti-SSRF | Host disfarçado no `/scan/verify-check` (público): com porta (`127.0.0.1:8081`, `localhost:8081`, `169.254.169.254:80`, `[::1]:443`) e com delimitador (`127.0.0.1/`, `127.0.0.1#`, espaço no fim) | Rejeitado (403), igual ao host sem porta | RestAssured | P1 | 🔲 A fazer — BUG-05 corrigido no Backend (2026-10-29, `bugs/BUG-05-ssrf-host-com-porta.md`); desbloqueado: com porta → 403, controle público com porta → 200 |
+| SSRF-07 | Anti-SSRF | Host disfarçado no `/scan/verify-check` (público): com porta (`127.0.0.1:8081`, `localhost:8081`, `169.254.169.254:80`, `[::1]:443`) e com delimitador (`127.0.0.1/`, `127.0.0.1#`, espaço no fim) | Rejeitado (403), igual ao host sem porta | RestAssured | P1 | ✅ RestAssured (2026-11-24, `SsrfVerifyCheckTest`) — BUG-05 corrigido no Backend (2026-10-29, `bugs/BUG-05-ssrf-host-com-porta.md`); as 7 variantes → 403, controle `juice-shop:3000` → 200; vermelho conferido no 8099 (`127.0.0.1:8081` e `127.0.0.1#` → 200) |
 
 ## Domínio e motor de scan
 
