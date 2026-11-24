@@ -640,6 +640,7 @@ lista divergirem, vale a ficha (§12).
   vermelho com o fix (revisão no fim das fichas).
 - **SCAN-14** (BUG-13) — contrato na §12, Etapa M; ficha 20.
 - **SCAN-15** (BUG-21) — contrato na §12, Etapa N; ficha 21.
+- **SCAN-16** (BUG-22) — contrato na §12, Etapa O; ficha 22.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -1352,7 +1353,44 @@ posição dele na fila também é decisão do dono.
   - não afirme `overallScore` (22 antes e depois) nem o nível (`SHOWCASE`);
   - vermelho: o 8099 barra o `cookies-mock`. O vermelho de verdade pede o `backend` no
     commit `0ee80e9`.
-- **Lateral:** **BUG-22** (aberto, P2): `AMP_TOKEN` (Google Analytics) e `s_sess` (Adobe
-  Analytics) saem HIGH no card e como sessão no painel, pelos fragmentos "token" e
-  "sess". Os dois lados agora concordam, mas erram juntos. Reproduzido com um mapeamento
-  temporário do WireMock, apagado pelo reset.
+- **Lateral:** **BUG-22** (P2, ✅ corrigido na Etapa O): `AMP_TOKEN` (Google Analytics)
+  e `s_sess` (Adobe Analytics) saem HIGH no card e como sessão no painel, pelos
+  fragmentos "token" e "sess". Os dois lados agora concordam, mas erram juntos.
+  Reproduzido com um mapeamento temporário do WireMock, apagado pelo reset.
+
+### Etapa O — BUG-22 ✅ corrigido (analytics com nome de sessão) — 2026-11-23
+- **Decisão do dono (2026-11-23):** uma lista de nomes conhecidos de analytics, junto
+  com o Hotjar. `AMP_TOKEN`, `s_sess` e o `_pin_unauth` (achado na leitura) deixam de ser
+  sessão. O `intercom-session-*` (chat) continua sessão: segundo a Intercom, ele dá acesso
+  às conversas do visitante. Cada nome novo entra com teste.
+- **Fix (Backend):** `CookieSecurityService.tipo` ganhou `ANALYTICS_COM_NOME_DE_SESSAO`
+  (nome inteiro, sem caixa). Vale para o card e o painel, que leem a mesma regra desde o
+  BUG-21.
+- **Regressão:**
+  - `CookieDeSessaoTest`: a tabela passou de 26 para 30 nomes (os três, mais o
+    `intercom-session-qa123` como sessão), mais o alvo `/analytics` inteiro, com controle;
+  - `CookieAtributosTest.analyticsComNomeDeSessaoNaoCusta`: os três sem flag, nota 100;
+  - contra o código antigo: 8 de 103 vermelhos (o Intercom é verde nos dois). Backend
+    977 → 987. Container `backend` rebuildado.
+- **Infra:** stub novo `env/wiremock/mappings/cookies-analytics.json`: o mesmo host
+  `cookies-mock`, caminho `/analytics`, os três cookies sem flag. Recarregar o WireMock:
+  `curl -X POST http://localhost:8082/__admin/mappings/reset`.
+- **Ao vivo (8081, qa-pro):**
+  - `/analytics`: antes, os três HIGH, "3 cookie(s)", nota 22 e painel com os três;
+    depois, os três LOW, sem `INSECURE_COOKIES`, nota 32 e painel sem cookie;
+  - o mesmo em `en`;
+  - `/nomes` (SCAN-15) e raiz (SCAN-09) iguais;
+  - na tela (8090, qa-pro), o painel sem "Cookies de sessão" e os três cards LOW;
+  - RestAssured do dono: 44 / 1 / 2. A falha é o PLAN-02 (Etapa L), já conhecida.
+- **Contrato do SCAN-16 (o dono escreve), detalhado na ficha 22:**
+  - qa-pro, pt-BR: `GET /scan?url=http://cookies-mock:8080/analytics`;
+  - controle: `cookieIssues` com os três, todos LOW;
+  - sem `INSECURE_COOKIES` em `score.issues`; sem `COOKIES` em `impactIndicators`.
+- **O que o SCAN-16 prova:** que cookie de analytics com "token", "sess" ou "auth" no nome
+  não vira achado HIGH nem custa ponto.
+- **Armadilhas do SCAN-16:**
+  - afirmar ausência pede o controle antes: sem o stub carregado, tudo passa vazio;
+  - use o qa-pro (trava de plano);
+  - não afirme `overallScore` (22 → 32, mas depende dos outros módulos);
+  - vermelho: o 8099 barra o `cookies-mock`. O vermelho de verdade pede o `backend` no
+    commit `c4711db`.

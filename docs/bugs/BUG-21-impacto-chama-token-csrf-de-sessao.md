@@ -125,4 +125,4 @@ O que mudou (Backend):
 
 Na conferência, `AMP_TOKEN` (Google Analytics) e `s_sess` (Adobe Analytics) saíram HIGH no
 card e como sessão no painel. Os dois agora concordam, mas erram juntos. Registrado como
-**BUG-22**, aberto.
+**BUG-22**. ✅ Corrigido depois, na Etapa O.

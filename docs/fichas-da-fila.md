@@ -17,7 +17,8 @@ quem escreve é o dono. Os nomes de classe são sugestões.
   `docker compose -f env/docker-compose.test.yml up -d wiremock backend`.
 - O stub do SCAN-14 (`env/wiremock/mappings/cookies-csrf.json`, `cookies-mock:8080/so-csrf`)
   só vale com o WireMock recarregado: `curl -X POST http://localhost:8082/__admin/mappings/reset`.
-  O do SCAN-15 (`env/wiremock/mappings/cookies-nomes.json`, `cookies-mock:8080/nomes`) também.
+  O do SCAN-15 (`env/wiremock/mappings/cookies-nomes.json`, `cookies-mock:8080/nomes`) e o do
+  SCAN-16 (`env/wiremock/mappings/cookies-analytics.json`, `cookies-mock:8080/analytics`) também.
 - Depois de reiniciar o Docker, `juice-shop` e `backend-noallowlist` não sobem sozinhos:
   `docker compose -f env/docker-compose.test.yml up -d --no-build juice-shop backend-noallowlist`.
 
@@ -106,6 +107,7 @@ ele para o `TestConfig`, mas a decisão é sua.
 | 19 | RATE-01 | P1 | `RateLimitTest` (nova) | Retomado em 2026-11-23 (BUG-20). Pede o balde cheio: rode a classe sozinha depois do restart, ou espere 60 s no começo. |
 | 20 | SCAN-14 | P2 | `LaudoStubsTest` | Entrou em 2026-11-23 (BUG-13). Mesmo stub do SCAN-09: faça depois dele. |
 | 21 | SCAN-15 | P2 | `LaudoStubsTest` | Entrou em 2026-11-23 (BUG-21). Mesmo host do SCAN-09 e do SCAN-14: faça junto. |
+| 22 | SCAN-16 | P2 | `LaudoStubsTest` | Entrou em 2026-11-23 (BUG-22). Mesmo host do SCAN-09, SCAN-14 e SCAN-15: faça junto. |
 
 ---
 
@@ -944,6 +946,65 @@ quiser, eu preparo (é infra). Medido antes do fix:
 - O mesmo em `en`.
 - Visitante: `detail` null.
 - Na tela (qa-pro), o painel mostra "Cookies de sessão: laravel_session".
+
+---
+
+### 22. SCAN-16 (P2) · acrescentado em 2026-11-23
+
+**O que prova e por quê.** Prova que cookie de analytics com cara de sessão no nome não é
+tratado como sessão: sai LOW no card, não desconta da nota e não aparece no painel "O que
+está em jogo". Os três do alvo são gravados pelo JavaScript da página e não abrem conta:
+- `AMP_TOKEN` (Google Analytics), que contém "token";
+- `s_sess` (Adobe Analytics), que contém "sess";
+- `_pin_unauth` (tag do Pinterest), que contém "auth".
+
+Antes (BUG-22), os três saíam HIGH, o laudo dizia "3 cookie(s) com problemas de segurança"
+e a nota perdia 10 pontos. Isso é um achado falso: o dono do site não tem o que corrigir,
+porque não controla como o Google, a Adobe e o Pinterest gravam esses cookies.
+
+**Preparar.** O stub novo (`env/wiremock/mappings/cookies-analytics.json`) só vale com o
+WireMock recarregado: `curl -X POST http://localhost:8082/__admin/mappings/reset`. Para
+conferir, `curl -i -H "Host: cookies-mock:8080" http://localhost:8082/analytics` devolve
+três `Set-Cookie`, sem flag nenhuma: `AMP_TOKEN`, `s_sess` e `_pin_unauth`.
+
+**Pedido.** Use o qa-pro, `Accept-Language: pt-BR`, `active=false`:
+`GET /scan?url=http://cookies-mock:8080/analytics`.
+
+**Afirmar,** nesta ordem:
+1. **Controle:** `cookieIssues` tem os três cookies (procure pelo `name`), cada um com
+   `risk` LOW.
+2. Em `score.issues`, **nenhum** item com `id` = `INSECURE_COOKIES`.
+3. Em `impactIndicators`, **nenhum** item com `source` = `COOKIES`.
+
+**Por que o controle vem primeiro.** Os passos 2 e 3 afirmam que algo **não** existe. Uma
+afirmação de ausência também passa quando o scan não leu cookie nenhum. Por exemplo, se o
+WireMock não foi recarregado, o `/analytics` devolve 404 sem cookie: não há achado, o
+painel fica vazio, e o teste fica verde sem provar nada. O passo 1 garante que os cookies
+foram lidos. Só então "sem achado" quer dizer "não é sessão".
+
+**Armadilhas.**
+- **Use o qa-pro.** Para o qa-free e o visitante, `cookieIssues` vem null (trava de
+  plano), e o controle falha.
+- **Os cookies continuam no card.** O `problems` de cada um continua listando Secure,
+  HttpOnly e SameSite. O que muda é o `risk`.
+- **Não afirme `overallScore`.** Medido: 22 antes e 32 depois. Mas a nota depende dos
+  outros módulos; o que este caso prova é o achado de cookies.
+- **Cache de scan.** Repetir o mesmo endereço em menos de 2 min devolve o resultado
+  guardado, que é o mesmo.
+- **Fora do caso:** o `intercom-session-*` (chat) continua sendo sessão, por decisão do
+  dono (dá acesso às conversas do visitante). Isso está no teste do Backend.
+
+**Ver o vermelho.** O 8099 barra o `cookies-mock` (403, sem allowlist). Para ver o
+vermelho de verdade, é preciso o `backend` buildado no commit `c4711db`, o último antes do
+fix. Se quiser, eu preparo (é infra). Medido antes do fix: os três HIGH, "3 cookie(s)",
+-10 na nota, e o painel com `AMP_TOKEN`, `s_sess` e `_pin_unauth`.
+
+**Conferido em 2026-11-23.**
+- Os três LOW, com os três códigos em `problems`.
+- Sem `INSECURE_COOKIES`.
+- `impactIndicators` vazio.
+- O mesmo em `en`.
+- Na tela (qa-pro), o painel não mostra "Cookies de sessão", e os três cards estão LOW.
 
 ---
 

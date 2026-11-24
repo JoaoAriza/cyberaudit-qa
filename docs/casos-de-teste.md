@@ -5,7 +5,7 @@ testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogado
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
 Contagem atual (2026-11-23, com os casos acrescentados depois, como o SSRF-07, o
-SCAN-05 a SCAN-15, o UI-04, o PLAN-03 e o PLAN-04): 56 casos — 21 P0, 26 P1, 9 P2.
+SCAN-05 a SCAN-16, o UI-04, o PLAN-03 e o PLAN-04): 57 casos — 21 P0, 26 P1, 10 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -76,6 +76,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SCAN-13 | Motor | Alvo inexistente ou sem resposta: `http://nao-existe-qa.invalid` (qa-free, cota lida antes e depois); `http://wiremock:9` (resolve, nada escuta na porta); controle: alvo que responde 404 | 1º: **422**, `error` `TARGET_NOT_FOUND`, `host` = o domínio, `remainingScans` igual antes e depois; 2º: **422**, `error` `TARGET_UNREACHABLE`, `host` `wiremock`, `message` sem "null"; controle: 200 com `httpStatus` 404 | RestAssured | P1 | 🔲 A fazer — BUG-16 corrigido no Backend (2026-11-22, `bugs/BUG-16-host-sem-resposta-ganha-nota.md`); contrato no HANDOFF §12, Etapa K; ficha 18 |
 | SCAN-14 | Motor | Compliance (LGPD Art. 49) diz o mesmo que o card do cookie: `cookies-mock:8080/` (três cookies sem SameSite) e `cookies-mock:8080/so-csrf` (só um `XSRF-TOKEN` sem flags), qa-pro, pt-BR | Raiz: Art. 49 com o item "Cookies sem atributo SameSite" (e o de HttpOnly, controle). `/so-csrf`: Art. 49 com Secure e SameSite, **sem** HttpOnly; o `XSRF-TOKEN` com `problems` `["COOKIE_SEM_SECURE","COOKIE_SEM_SAMESITE"]` | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-13 corrigido no Backend e no Frontend (2026-11-23, `bugs/BUG-13-compliance-samesite-nunca-dispara.md`); contrato no HANDOFF §12, Etapa M; ficha 20 |
 | SCAN-15 | Motor | O painel "O que está em jogo" e o card do cookie dão a mesma resposta para "é sessão?": `cookies-mock:8080/nomes` (cinco cookies sem flag: `csrftoken`, `inside_banner`, `user_pref`, `_hjSession_1873402` e `laravel_session`), qa-pro, pt-BR | `impactIndicators` de `COOKIES`: um só, `laravel_session`. Card: `laravel_session` HIGH, `_hjSession_1873402` e os outros três LOW. `INSECURE_COOKIES` com título "1 cookie(s)…" | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-21 corrigido no Backend (2026-11-23, `bugs/BUG-21-impacto-chama-token-csrf-de-sessao.md`); contrato no HANDOFF §12, Etapa N; ficha 21 |
+| SCAN-16 | Motor | Cookie de analytics com "token", "sess" ou "auth" no nome não é sessão: `cookies-mock:8080/analytics` (`AMP_TOKEN`, `s_sess` e `_pin_unauth`, sem flag), qa-pro, pt-BR | Controle: `cookieIssues` com os três, todos LOW. Sem `INSECURE_COOKIES` em `score.issues`; sem `COOKIES` em `impactIndicators` | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-22 corrigido no Backend (2026-11-23, `bugs/BUG-22-analytics-com-nome-de-sessao.md`); contrato no HANDOFF §12, Etapa O; ficha 22 |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
 ## Relatório e interface
@@ -619,3 +620,16 @@ neles, e o card dos cookies deles é o mesmo.
 Achado lateral registrado e não corrigido: BUG-22 (P2). `AMP_TOKEN` (Google Analytics) e
 `s_sess` (Adobe Analytics) saem HIGH no card e como sessão no painel, pelos fragmentos
 "token" e "sess".
+
+## 2026-11-23 — BUG-22 corrigido (analytics com nome de sessão); SCAN-16 novo
+
+Oitava etapa da rodada dos achados laterais (HANDOFF §12, Etapa O). Decisão do dono: uma
+lista de nomes conhecidos de analytics, junto com o Hotjar. `AMP_TOKEN` (Google
+Analytics), `s_sess` (Adobe Analytics) e `_pin_unauth` (tag do Pinterest, achado na
+leitura) deixam de ser sessão, no card e no painel. O `intercom-session-*` (chat)
+continua sessão.
+
+Regressão no Backend (`bugs/BUG-22-analytics-com-nome-de-sessao.md`). Caso novo SCAN-16
+(P2, 🔲), com o stub novo `env/wiremock/mappings/cookies-analytics.json`
+(`cookies-mock:8080/analytics`). O SCAN-09, o SCAN-14 e o SCAN-15 não mudam. Nenhum achado
+lateral novo.
