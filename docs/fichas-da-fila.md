@@ -17,6 +17,7 @@ quem escreve é o dono. Os nomes de classe são sugestões.
   `docker compose -f env/docker-compose.test.yml up -d wiremock backend`.
 - O stub do SCAN-14 (`env/wiremock/mappings/cookies-csrf.json`, `cookies-mock:8080/so-csrf`)
   só vale com o WireMock recarregado: `curl -X POST http://localhost:8082/__admin/mappings/reset`.
+  O do SCAN-15 (`env/wiremock/mappings/cookies-nomes.json`, `cookies-mock:8080/nomes`) também.
 - Depois de reiniciar o Docker, `juice-shop` e `backend-noallowlist` não sobem sozinhos:
   `docker compose -f env/docker-compose.test.yml up -d --no-build juice-shop backend-noallowlist`.
 
@@ -104,6 +105,7 @@ ele para o `TestConfig`, mas a decisão é sua.
 | 18 | SCAN-13 | P1 | `ScanMotorTest` ou classe própria | Entrou em 2026-11-22 (BUG-16). Dois 422 e um controle: faça depois do SCAN-01. |
 | 19 | RATE-01 | P1 | `RateLimitTest` (nova) | Retomado em 2026-11-23 (BUG-20). Pede o balde cheio: rode a classe sozinha depois do restart, ou espere 60 s no começo. |
 | 20 | SCAN-14 | P2 | `LaudoStubsTest` | Entrou em 2026-11-23 (BUG-13). Mesmo stub do SCAN-09: faça depois dele. |
+| 21 | SCAN-15 | P2 | `LaudoStubsTest` | Entrou em 2026-11-23 (BUG-21). Mesmo host do SCAN-09 e do SCAN-14: faça junto. |
 
 ---
 
@@ -870,6 +872,78 @@ o de SameSite.
 
 **Conferido em 2026-11-23.** A: Secure, HttpOnly e SameSite. B: Secure e SameSite, sem
 HttpOnly; `XSRF-TOKEN` com os dois códigos. O mesmo em `en`. qa-free: `compliance` null.
+
+---
+
+### 21. SCAN-15 (P2) · acrescentado em 2026-11-23
+
+**O que prova e por quê.** Prova que o painel "O que está em jogo" e o card do cookie dão a
+mesma resposta para "é cookie de sessão?". Antes do BUG-21, cada um tinha a sua regra.
+
+O painel decidia por fragmentos do nome. Chamava de sessão:
+- o `csrftoken`, por "token";
+- o `inside_banner`, por "sid";
+- o `user_pref`, por "user".
+
+Com o teto de três indícios, esses três ocupavam as vagas e o `laravel_session`, o único
+de sessão, sumia do painel.
+
+O card chamava de sessão o `_hjSession_1873402`, analytics do Hotjar, por "session". Ele
+saía HIGH no card.
+
+O cliente lia no painel que o token CSRF era a sessão do site e via um cookie de analytics
+marcado como risco alto.
+
+**Preparar.** O stub novo (`env/wiremock/mappings/cookies-nomes.json`) só vale com o
+WireMock recarregado: `curl -X POST http://localhost:8082/__admin/mappings/reset`. Para
+conferir, `curl -i -H "Host: cookies-mock:8080" http://localhost:8082/nomes` devolve cinco
+`Set-Cookie`, sem flag nenhuma: `csrftoken`, `inside_banner`, `user_pref`,
+`_hjSession_1873402` e `laravel_session`.
+
+**Pedido.** Use o qa-pro, `Accept-Language: pt-BR`, `active=false`:
+`GET /scan?url=http://cookies-mock:8080/nomes`.
+
+**Afirmar.**
+- Em `impactIndicators`, os itens com `source` = `COOKIES` são **um só**, e o `detail` dele
+  é `laravel_session`.
+- Em `cookieIssues`, procure pelo `name`, não pela posição:
+  - `laravel_session` tem `risk` HIGH;
+  - `_hjSession_1873402` tem `risk` LOW;
+  - `csrftoken`, `inside_banner` e `user_pref` têm `risk` LOW.
+- Em `score.issues`, o item com `id` = `INSECURE_COOKIES` tem `title` começando com
+  "1 cookie(s)".
+
+**Armadilhas.**
+- **Use o qa-pro.** Para o qa-free e o visitante, o `impactIndicators` vem só com a origem
+  (`detail` null) e o `cookieIssues` vem null. É a trava de plano, não bug.
+- **Filtre o `impactIndicators` por `source`.** Ele também junta JWT, documentação de API
+  e GraphQL. Neste alvo só há cookie, mas não conte com a posição.
+- **Não afirme `overallScore`.** A nota é 22 antes e depois. O `laravel_session` já custa
+  os 10, e o desconto é o do pior cookie, não a soma. O que muda é o título do achado
+  ("2 cookie(s)" → "1 cookie(s)").
+- **O nível (`impact`) não muda:** é `SHOWCASE` antes e depois, porque o nível vem só dos
+  campos de formulário.
+- **Idioma.** O título do achado sai no idioma pedido: em `en` é "1 cookie(s) with
+  security problems". Afirmar o começo ("1 cookie(s)") vale nos dois.
+- **O card continua listando os cinco cookies.** Os LOW estão lá, como informação. O que
+  mudou foi o `risk` do Hotjar e o painel.
+- **Cache de scan.** Repetir o mesmo endereço em menos de 2 min devolve o resultado
+  guardado, que é o mesmo.
+
+**Ver o vermelho.** O 8099 barra o `cookies-mock` (403, sem allowlist). Para ver o vermelho
+de verdade, é preciso o `backend` buildado no commit `0ee80e9`, o último antes do fix. Se
+quiser, eu preparo (é infra). Medido antes do fix:
+- o painel listava `csrftoken`, `inside_banner` e `user_pref`, sem o `laravel_session`;
+- `_hjSession_1873402` HIGH;
+- "2 cookie(s)".
+
+**Conferido em 2026-11-23.**
+- Painel: só `laravel_session`.
+- Card: `_hjSession_1873402` LOW, `laravel_session` HIGH.
+- Achado: "1 cookie(s) com problemas de segurança".
+- O mesmo em `en`.
+- Visitante: `detail` null.
+- Na tela (qa-pro), o painel mostra "Cookies de sessão: laravel_session".
 
 ---
 

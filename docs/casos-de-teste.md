@@ -5,7 +5,7 @@ testes.pdf`, 2026-09-29) com os 12 casos do módulo de pagamento (já catalogado
 `payment-module-requests.md` durante a validação do checkout transparente) e 1 caso
 novo (PAY-13), depois que o cartão virou opcional sem CPF. 39 casos: 22 P0, 14 P1, 3 P2.
 Contagem atual (2026-11-23, com os casos acrescentados depois, como o SSRF-07, o
-SCAN-05 a SCAN-14, o UI-04, o PLAN-03 e o PLAN-04): 55 casos — 21 P0, 26 P1, 8 P2.
+SCAN-05 a SCAN-15, o UI-04, o PLAN-03 e o PLAN-04): 56 casos — 21 P0, 26 P1, 9 P2.
 
 P0 cobre segurança e regras de negócio centrais — **se um P0 falhar, é bug a
 registrar (ver `template-bug.md`), não teste a ajustar.**
@@ -75,6 +75,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 | SCAN-12 | Motor | Cache de scan: ativo na home e logo depois na busca do Juice Shop (qa-enterprise); passivo num endereço único por execução com o qa-enterprise e logo depois com o qa-pro; controle: o qa-pro repete o endereço | Busca com a `url` pedida e `dbErrorLeakageSuspected` true; `GET /history/juice-shop` do qa-pro com **1** item da `url` única, e ainda 1 depois do controle (acerto do cache) | RestAssured | P1 | 🔲 A fazer — BUG-17 corrigido no Backend (2026-11-18, `bugs/BUG-17-cache-de-scan-ignora-caminho.md`); contrato no HANDOFF §12, Etapa J; ficha 17 |
 | SCAN-13 | Motor | Alvo inexistente ou sem resposta: `http://nao-existe-qa.invalid` (qa-free, cota lida antes e depois); `http://wiremock:9` (resolve, nada escuta na porta); controle: alvo que responde 404 | 1º: **422**, `error` `TARGET_NOT_FOUND`, `host` = o domínio, `remainingScans` igual antes e depois; 2º: **422**, `error` `TARGET_UNREACHABLE`, `host` `wiremock`, `message` sem "null"; controle: 200 com `httpStatus` 404 | RestAssured | P1 | 🔲 A fazer — BUG-16 corrigido no Backend (2026-11-22, `bugs/BUG-16-host-sem-resposta-ganha-nota.md`); contrato no HANDOFF §12, Etapa K; ficha 18 |
 | SCAN-14 | Motor | Compliance (LGPD Art. 49) diz o mesmo que o card do cookie: `cookies-mock:8080/` (três cookies sem SameSite) e `cookies-mock:8080/so-csrf` (só um `XSRF-TOKEN` sem flags), qa-pro, pt-BR | Raiz: Art. 49 com o item "Cookies sem atributo SameSite" (e o de HttpOnly, controle). `/so-csrf`: Art. 49 com Secure e SameSite, **sem** HttpOnly; o `XSRF-TOKEN` com `problems` `["COOKIE_SEM_SECURE","COOKIE_SEM_SAMESITE"]` | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-13 corrigido no Backend e no Frontend (2026-11-23, `bugs/BUG-13-compliance-samesite-nunca-dispara.md`); contrato no HANDOFF §12, Etapa M; ficha 20 |
+| SCAN-15 | Motor | O painel "O que está em jogo" e o card do cookie dão a mesma resposta para "é sessão?": `cookies-mock:8080/nomes` (cinco cookies sem flag: `csrftoken`, `inside_banner`, `user_pref`, `_hjSession_1873402` e `laravel_session`), qa-pro, pt-BR | `impactIndicators` de `COOKIES`: um só, `laravel_session`. Card: `laravel_session` HIGH, `_hjSession_1873402` e os outros três LOW. `INSECURE_COOKIES` com título "1 cookie(s)…" | RestAssured + WireMock | P2 | 🔲 A fazer — BUG-21 corrigido no Backend (2026-11-23, `bugs/BUG-21-impacto-chama-token-csrf-de-sessao.md`); contrato no HANDOFF §12, Etapa N; ficha 21 |
 | SCORE-01 | Pontuação | Scan com achado crítico e o resto limpo | Nota não fica alta (override de severidade) | RestAssured | P0 | 🔲 A fazer |
 
 ## Relatório e interface
@@ -601,3 +602,20 @@ Caso novo SCAN-14 (P2, 🔲), com o stub novo `env/wiremock/mappings/cookies-csr
 Achado lateral registrado e não corrigido: BUG-21 (P3). O painel "O que está em jogo" chama
 o `XSRF-TOKEN` de cookie de sessão, porque o rótulo de impacto tem a sua própria lista de
 nomes.
+
+## 2026-11-23 — BUG-21 corrigido ("é cookie de sessão?" com duas respostas); SCAN-15 novo; BUG-22 aberto
+
+Sétima etapa da rodada dos achados laterais (HANDOFF §12, Etapa N). Decisões do dono:
+- uma regra só para "é cookie de sessão?", a do card, no card e no painel "O que está em
+  jogo". O token CSRF, o `inside_banner` e o `user_pref` saem do painel, e o Hotjar deixa
+  de ser HIGH no card;
+- o painel continua vendo só cookie com problema (fica como está).
+
+Regressão no Backend (`bugs/BUG-21-impacto-chama-token-csrf-de-sessao.md`). Caso novo
+SCAN-15 (P2, 🔲), com o stub novo `env/wiremock/mappings/cookies-nomes.json`
+(`cookies-mock:8080/nomes`). O SCAN-09 e o SCAN-14 não mudam: o painel não é afirmado
+neles, e o card dos cookies deles é o mesmo.
+
+Achado lateral registrado e não corrigido: BUG-22 (P2). `AMP_TOKEN` (Google Analytics) e
+`s_sess` (Adobe Analytics) saem HIGH no card e como sessão no painel, pelos fragmentos
+"token" e "sess".

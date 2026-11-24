@@ -128,4 +128,4 @@ O que mudou:
 
 O painel "O que está em jogo" chamou o `XSRF-TOKEN` de "cookie de sessão". O
 `ImpactLabelService` tem a sua própria lista de nomes de sessão. Registrado como
-**BUG-21**, aberto.
+**BUG-21**. ✅ Corrigido depois, na Etapa N.

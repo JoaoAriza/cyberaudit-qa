@@ -639,6 +639,7 @@ lista divergirem, vale a ficha (§12).
 - **RATE-01** (BUG-20) — contrato na §12, Etapa L; ficha 19. O PLAN-02, já escrito, fica
   vermelho com o fix (revisão no fim das fichas).
 - **SCAN-14** (BUG-13) — contrato na §12, Etapa M; ficha 20.
+- **SCAN-15** (BUG-21) — contrato na §12, Etapa N; ficha 21.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
@@ -1299,9 +1300,59 @@ posição dele na fila também é decisão do dono.
   - vermelho: o 8099 barra o `cookies-mock`; o vermelho de verdade pede o `backend` no
     commit `260074a`.
 - **Laterais:**
-  - **BUG-21** (aberto, P3): o painel "O que está em jogo" chama o `XSRF-TOKEN` de cookie de
-    sessão (`impactIndicators` `COOKIES`/`XSRF-TOKEN`). O `ImpactLabelService` tem a sua
-    própria lista de nomes de sessão, por "contém" (`token`, `sid`, `user`...). O nível não
-    muda: ele vem só dos campos de formulário.
+  - **BUG-21** (P3, ✅ corrigido na Etapa N): o painel "O que está em jogo" chama o
+    `XSRF-TOKEN` de cookie de sessão (`impactIndicators` `COOKIES`/`XSRF-TOKEN`). O
+    `ImpactLabelService` tem a sua própria lista de nomes de sessão, por "contém"
+    (`token`, `sid`, `user`...). O nível não muda: ele vem só dos campos de formulário.
   - Observação, sem bug: a linha de flags do card continua mostrando "✗ HttpOnly" em
     vermelho no token CSRF. É a flag crua, não o veredito.
+
+### Etapa N — BUG-21 ✅ corrigido ("é cookie de sessão?" com duas respostas) — 2026-11-23
+- **Decisões do dono (2026-11-23):**
+  1. uma regra só, a do card (`CookieSecurityService.tipo`), no painel "O que está em
+     jogo" e no card. O que a lista do painel descartava (CDN e analytics) também deixa
+     de ser sessão no card;
+  2. o painel continua vendo só cookie com problema (`cookieIssues`). Um cookie de sessão
+     bem configurado não vira indício (fica como está).
+- **Fix (Backend):**
+  - `ImpactLabelService`: saíram a lista de fragmentos (`sess`, `sid`, `token`, `user`...)
+    e a de CDN/analytics. O painel pergunta ao `CookieSecurityService.tipo`.
+  - `CookieSecurityService.tipo`: cookie que começa com `_hj` (Hotjar) não é de sessão. Do
+    resto da lista antiga do painel, nenhum nome tinha fragmento de sessão pela regra do
+    card. Já saíam LOW, e o teste confere isso.
+- **Regressão:**
+  - `CookieDeSessaoTest` (73): uma tabela de 26 nomes com a resposta certa, conferida no
+    card e no painel; os 19 nomes da lista antiga do painel; o alvo `/nomes` inteiro.
+  - `CookieAtributosTest.hotjarNaoCusta`: só Hotjar sem flag, nota 100.
+  - Contra o código antigo: 17 de 93 vermelhos. Backend 903 → 977. Container `backend`
+    rebuildado.
+- **Infra:** stub novo `env/wiremock/mappings/cookies-nomes.json`: o mesmo host
+  `cookies-mock`, caminho `/nomes`, cinco cookies sem flag (`csrftoken`,
+  `inside_banner`, `user_pref`, `_hjSession_1873402`, `laravel_session`). Recarregar o
+  WireMock: `curl -X POST http://localhost:8082/__admin/mappings/reset`.
+- **Ao vivo (8081, qa-pro)** (a tabela está no bug):
+  - `/so-csrf`: o painel, antes `XSRF-TOKEN`, agora vazio;
+  - `/nomes`: o painel, antes `csrftoken`, `inside_banner` e `user_pref` (sem o
+    `laravel_session`), agora só `laravel_session`. `_hjSession_1873402` HIGH → LOW.
+    "2 cookie(s)" → "1 cookie(s)". Nota igual (22);
+  - raiz (SCAN-09) igual; o mesmo em `en`; visitante só com a origem;
+  - na tela (8090, qa-pro), "Cookies de sessão: laravel_session";
+  - RestAssured do dono: 44 / 1 / 2. A falha é o PLAN-02 (Etapa L), já conhecida.
+- **Contrato do SCAN-15 (o dono escreve), detalhado na ficha 21:**
+  - qa-pro, pt-BR: `GET /scan?url=http://cookies-mock:8080/nomes`;
+  - `impactIndicators` com `source` `COOKIES`: um só, `laravel_session`;
+  - `cookieIssues`: `laravel_session` HIGH, `_hjSession_1873402` LOW, os outros três LOW;
+  - `INSECURE_COOKIES` com título começando por "1 cookie(s)".
+- **O que o SCAN-15 prova:** que o painel e o card dão a mesma resposta para "é cookie de
+  sessão?". O token CSRF, a preferência e o analytics saem do painel, e o cookie de
+  sessão de verdade volta para ele.
+- **Armadilhas do SCAN-15:**
+  - qa-free e visitante recebem o indício sem `detail` (trava de plano): use o qa-pro;
+  - filtre `impactIndicators` por `source`;
+  - não afirme `overallScore` (22 antes e depois) nem o nível (`SHOWCASE`);
+  - vermelho: o 8099 barra o `cookies-mock`. O vermelho de verdade pede o `backend` no
+    commit `0ee80e9`.
+- **Lateral:** **BUG-22** (aberto, P2): `AMP_TOKEN` (Google Analytics) e `s_sess` (Adobe
+  Analytics) saem HIGH no card e como sessão no painel, pelos fragmentos "token" e
+  "sess". Os dois lados agora concordam, mas erram juntos. Reproduzido com um mapeamento
+  temporário do WireMock, apagado pelo reset.
