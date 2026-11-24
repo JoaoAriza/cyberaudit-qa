@@ -40,7 +40,7 @@ public class SsrfVerifyCheckTest extends TestConfig{
             "127.0.0.1 "
     })
     @DisplayName("SSRF-07: Deve bloquear tentativas de varredura em hosts internos ou malformados com 403 DOMAIN_BLOCKED")
-    void testBloqueioSSsrfHostsInternos(String host) {
+    void testBloqueioSsrfHostsInternos(String host) {
         String token = tokenQaPro();
         given()
                 .header("Authorization", "Bearer " + token)
@@ -60,7 +60,7 @@ public class SsrfVerifyCheckTest extends TestConfig{
                 .header("Authorization", "Bearer " + token)
                 .queryParam("host", "juice-shop:3000")
                 .when()
-                .get("scan/verify-check")
+                .get("/scan/verify-check")
                 .then()
                 .statusCode(200)
                 .body("verified", equalTo(false));
