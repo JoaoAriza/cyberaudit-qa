@@ -641,6 +641,10 @@ lista divergirem, vale a ficha (§12).
 - **SCAN-14** (BUG-13) — contrato na §12, Etapa M; ficha 20.
 - **SCAN-15** (BUG-21) — contrato na §12, Etapa N; ficha 21.
 - **SCAN-16** (BUG-22) — contrato na §12, Etapa O; ficha 22.
+- **Depois da fila: Fase 7 — Playwright** (pedido do dono em 2026-11-24). O plano está em
+  `docs/handoff-playwright.md`. Pasta `playwright/`, ao lado do `e2e-cypress/`. É trilha de
+  aprendizado real, como foi o Cypress: o dono escreve os casos e o Claude faz a infra e revisa.
+  Começa pela Etapa P0, as decisões da §3 de lá.
 
 ## 11. Feedback de cliente sobre o laudo — etapas A–G (2026-11-07)
 
