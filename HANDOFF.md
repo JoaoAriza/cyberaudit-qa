@@ -1,5 +1,8 @@
 # HANDOFF — cyberaudit-qa (para colar no próximo chat)
 
+> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-01), como o chat
+> trabalha e a primeira mensagem sugerida. As seções 1 a 12 são histórico.
+
 Atualizado em 2026-10-03, porque a janela de contexto do chat anterior encheu.
 Autocontido: dá pra retomar sem ler o histórico. O escopo original é o PDF na raiz
 (`CyberAudit QA — Escopo do projeto de testes.pdf`); a versão em Markdown é
@@ -618,8 +621,8 @@ sugerida, com cada contrato reconferido ao vivo depois das etapas A–G. Onde a 
 lista divergirem, vale a ficha (§12).
 
 - **AUTH-05** (BUG-01) — contrato na Etapa 1.
-- **SSRF-03 hex** (BUG-02) — tirar o `@Disabled`; opcional `0177.0.0.1`. Etapa 2.
-- **SSRF-07** (BUG-05) — contrato e armadilhas na Etapa 3.
+- **SSRF-03 hex** (BUG-02) — ✅ feito em 2026-11-24 (`1b1e469`).
+- **SSRF-07** (BUG-05) — ✅ feito em 2026-11-24 (`eb7a861`).
 - **SCAN-01** (BUG-03) — contrato na Etapa 4.
 - **AUTH-04** (BUG-04) — contrato e armadilhas na Etapa 6 (lib TOTP no pom, conta qa-free).
 - **SCAN-03** — produto pronto (BUG-03 + BUG-06). SQLi: `dbErrorLeakageSuspected:true` no
@@ -1398,3 +1401,111 @@ posição dele na fila também é decisão do dono.
   - não afirme `overallScore` (22 → 32, mas depende dos outros módulos);
   - vermelho: o 8099 barra o `cookies-mock`. O vermelho de verdade pede o `backend` no
     commit `c4711db`.
+
+---
+
+## 13. Retomar aqui (2026-11-24)
+
+Esta seção é o ponto de partida do próximo chat. Ela substitui as listas de pendência das
+seções anteriores, que ficam como histórico. As regras da §0 continuam valendo.
+
+### Estado
+
+- **Bugs:** BUG-01 a BUG-22 corrigidos, cada um com regressão no Backend. Nenhum aberto em
+  `docs/bugs/`.
+- **Repositórios limpos, nada a commitar:**
+  - Backend `11fd610` (suíte 987, verde);
+  - Frontend `a88d471`;
+  - cyberaudit-qa `51cecef`.
+- **Suíte RestAssured do dono (2026-11-24):** 52 testes, 1 falha, 1 pulado.
+  - A falha é o PLAN-02, que espera o contrato antigo (ver "Correções pendentes" abaixo).
+  - O pulado é o SCAN-03, ainda com o `@Disabled` do BUG-03. Ele volta no caso 4 da fila.
+
+### A fila: 22 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
+
+| # | Caso | Estado |
+|---|---|---|
+| 1 | SSRF-03 hex | ✅ `1b1e469`. Vermelho visto no 8099 |
+| 2 | SSRF-07 | ✅ `eb7a861` + `51cecef`. Vermelho visto no 8099 |
+| **3** | **SCAN-01** | **Próximo.** Contrato reconferido em 2026-11-24 (abaixo) |
+| 4 a 22 | SCAN-03, AUTH-05, AUTH-04, SCAN-09... | 🔲, na ordem da tabela |
+
+**SCAN-01 (P0), classe nova `ScanMotorTest`:**
+- **Pedido:** `GET /scan?url=http://juice-shop:3000/&active=false`, qa-pro,
+  `Accept-Language: pt-BR`.
+- **Afirmar:** status 200 **e** `httpStatus` 200; nenhum `moduleStatus` diferente de `OK`,
+  fora `CERT_TRANSPARENCY` e `CVE`.
+- **Conferido em 2026-11-24:** `httpStatus` 200 e os 15 módulos OK, em 4 s.
+- **Vermelho:** `http://juice-shop:3999/` (porta fechada) → 422 `TARGET_UNREACHABLE`.
+- **Dica já dada ao dono:** `moduleStatus` é um objeto, não uma lista. Dá para extrair
+  com `.extract().jsonPath().getMap("moduleStatus")` e afirmar com JUnit.
+
+Detalhes na ficha 3.
+
+**Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
+`playwright/`, e começa pela Etapa P0 (decisões).
+
+### Correções pendentes nos testes já escritos (do dono)
+
+Os detalhes estão no fim de `docs/fichas-da-fila.md`.
+- **UI-02** (⚠️, verde falso): o campo abre com "github.com" e o `.type()` acrescenta ao
+  texto. Falta `.clear()` e afirmar o host exato.
+- **PLAN-02** (⚠️): toma 429 na 6ª chamada, pelo rate limit do BUG-20. Falta tratar o 429
+  como "espere e repita".
+- **Sugestão, sem pressa:** o gerador de token está copiado no `SsrfGuardTest` (com
+  `userId`) e no `SsrfVerifyCheckTest` (sem). As duas cópias já divergiram. Levar o
+  `tokenPara(email, userId)` para o `TestConfig`.
+
+### Como o chat trabalha nesta fase (o ritmo que funcionou)
+
+1. **O Claude passa o caso:**
+   - o que ele prova e por quê;
+   - o que fazer;
+   - as armadilhas;
+   - como ver o vermelho.
+
+   Antes, ele reconfere o contrato ao vivo no mesmo dia.
+2. **O dono escreve** e diz "verifica".
+3. **O Claude revisa sem tocar nos arquivos do dono.** Copia o `api-restassured` para o
+   scratchpad e roda a classe:
+   - contra o 8081, para o verde;
+   - numa variação da cópia, contra o 8099 ou um alvo quebrado, para o vermelho.
+
+   Depois responde em duas partes: "corrija antes do commit" e "sugestões". Ele explica o
+   porquê de cada uma, porque o dono é iniciante em Java.
+4. **O Claude marca o caso como ✅ na matriz** e manda os comandos de commit. O dono commita.
+5. **O Claude passa o próximo caso.**
+
+### Subir o ambiente depois de reiniciar o PC
+
+Armadilha paga em 2026-11-24: todos os containers saem com "Exited (255)". Com o Docker
+Desktop aberto, rode a partir de `cyberaudit-qa/`:
+
+```
+docker compose -f env/docker-compose.test.yml up -d --no-build postgres coredns wiremock backend backend-noallowlist frontend juice-shop
+curl http://localhost:8081/actuator/health
+curl http://localhost:8099/actuator/health
+```
+
+- O `seeder` fica de fora: ele só roda para renovar os seeds.
+- Os stubs do WireMock que estão em arquivo carregam sozinhos quando o container sobe.
+- Depois de rodar a suíte inteira, reinicie o backend (`docker restart env-backend-1`).
+  Isso devolve a cota do qa-free, que fica em memória.
+
+### Armadilhas novas (2026-11-24)
+
+- **8099 e endereço de fora:** a imagem antiga lê `0177.0.0.1` como 177.0.0.1, que é
+  público. Nunca rode o octal no 8099 (está na ficha 1).
+- **8099 e metadata de nuvem:** o vermelho do SSRF-07 no 8099 usa só `127.0.0.1:8081` e
+  `127.0.0.1#`. O `169.254.169.254:80` faria o servidor antigo tentar conectar de verdade.
+- **Quando refazer a imagem do 8099:** ela continua antiga até o dono ver os vermelhos do
+  AUTH-05 e do AUTH-04 (fichas, seção 0). Só depois disso ela é refeita.
+- **Mensagem de commit:** sempre `tipo(escopo): descricao`. O `51cecef` ("ajustes de escrita
+  SSRF-07") saiu fora do padrão.
+
+### Primeira mensagem sugerida para o próximo chat
+
+> Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
+> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-01 (ficha 3): reconfira o
+> contrato ao vivo e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
+> revisão numa cópia e docs.
