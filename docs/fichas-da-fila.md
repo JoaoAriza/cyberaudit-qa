@@ -129,9 +129,13 @@ como 127.0.0.1. Dá para virar `@ParameterizedTest` com as duas.
 **Armadilhas.** A mensagem mudou para "…formato alternativo (equivale a 127.0.0.1)…". Não
 afirme a mensagem, só o `error`.
 
-**Ver o vermelho.** `base.uri.noAllowlist`: 200 (o scan roda).
+**Ver o vermelho.** `base.uri.noAllowlist`: 200 (o scan roda). **Só com o hex.** No 8099, o
+octal `0177.0.0.1` vira scan de 177.0.0.1, um endereço público de verdade. A chamada fica
+pendurada (passou de 90 s) e é tráfego para fora do ambiente de teste. Não rode o octal
+no 8099.
 
-**Conferido em 2026-11-15.** `0x7f000001` e `0177.0.0.1` → 403 `DOMAIN_BLOCKED`.
+**Conferido em 2026-11-15 e de novo em 2026-11-24.** 8081: `0x7f000001` e `0177.0.0.1` →
+403 `DOMAIN_BLOCKED`. 8099: `0x7f000001` → 200.
 
 ---
 

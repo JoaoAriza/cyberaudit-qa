@@ -50,7 +50,7 @@ Backend). Confirme o que a API retorna antes de fixar nos testes de qualquer for
 |---|---|---|---|---|---|---|
 | SSRF-01 | Anti-SSRF | Alvo `127.0.0.1`, `localhost`, `::1` | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-11) |
 | SSRF-02 | Anti-SSRF | Alvo `169.254.169.254`, `10.x`, `192.168.x` | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-11) |
-| SSRF-03 | Anti-SSRF | Formas alternativas: `2130706433`, `0x7f000001`, `127.1` | Rejeitado | RestAssured | P0 | 🔲 Reativar hex — decimal/curto ✅ RestAssured (2026-10-11); BUG-02 corrigido no Backend (2026-10-29, `bugs/BUG-02-ssrf-hex-nao-normalizado.md`), falta tirar o `@Disabled` do hex |
+| SSRF-03 | Anti-SSRF | Formas alternativas: `2130706433`, `0x7f000001`, `127.1` | Rejeitado | RestAssured | P0 | ✅ RestAssured — decimal/curto (2026-10-11); hex reativado em 2026-11-24, depois do BUG-02 (`bugs/BUG-02-ssrf-hex-nao-normalizado.md`); vermelho conferido no 8099 (200) |
 | SSRF-04 | Anti-SSRF | Hostname público que resolve para IP privado | Rejeitado | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; hostnames via extra_hosts → IP privado, CI-safe) |
 | SSRF-05 | Anti-SSRF | Alvo externo que redireciona para IP interno | Redirecionamento não seguido | RestAssured + WireMock | P1 | ✅ Passou — RestAssured (2026-10-12; redirect 302→interno não seguido, bloqueio no hop) |
 | SSRF-06 | Anti-SSRF | Allowlist de teste fora do profile `test` | Allowlist inexistente | RestAssured | P0 | ✅ Passou — RestAssured (2026-10-12; backend 8099 sem profile, juice-shop/wiremock → 403) |
