@@ -1,0 +1,27 @@
+{
+  "request": {
+    "method": "ANY",
+    "url": "/nomes",
+    "headers": {
+      "Host": { "matches": "cookies-mock(:[0-9]+)?" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "Set-Cookie": [
+        "csrftoken=qa-csrf; Path=/",
+        "inside_banner=1; Path=/",
+        "user_pref=escuro; Path=/",
+        "_hjSession_1873402=qa-hotjar; Path=/",
+        "laravel_session=qa-sessao; Path=/"
+      ]
+    },
+    "body": "<!doctype html><html><head><title>cookies-mock /nomes</title></head><body><p>Alvo de teste: cinco cookies sem flag nenhuma, quatro com nome que parece de sessao e nao e.</p></body></html>"
+  },
+  "metadata": {
+    "caso": "SCAN-15",
+    "nota": "Mesmo Host do cookies.json (alias cookies-mock), outro caminho. Cinco cookies sem Secure, HttpOnly e SameSite, nesta ordem: csrftoken (token CSRF do Django), inside_banner ('sid' no meio da palavra), user_pref (preferencia), _hjSession_1873402 (analytics do Hotjar, gravado por JavaScript) e laravel_session (sessao de verdade, o controle). Esperado depois do BUG-21: o painel 'O que esta em jogo' (impactIndicators COOKIES) lista so o laravel_session; no card, so o laravel_session e HIGH e o achado INSECURE_COOKIES diz '1 cookie(s)'."
+  }
+}
