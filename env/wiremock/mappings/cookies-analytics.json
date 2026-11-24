@@ -1,0 +1,25 @@
+{
+  "request": {
+    "method": "ANY",
+    "url": "/analytics",
+    "headers": {
+      "Host": { "matches": "cookies-mock(:[0-9]+)?" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "Set-Cookie": [
+        "AMP_TOKEN=%24NOT_FOUND; Path=/",
+        "s_sess=%20s_cc%3Dtrue; Path=/",
+        "_pin_unauth=dWlkPXFh; Path=/"
+      ]
+    },
+    "body": "<!doctype html><html><head><title>cookies-mock /analytics</title></head><body><p>Alvo de teste: tres cookies de analytics sem flag nenhuma, com nome que parece de sessao.</p></body></html>"
+  },
+  "metadata": {
+    "caso": "SCAN-16",
+    "nota": "Mesmo Host do cookies.json (alias cookies-mock), outro caminho. Tres cookies de analytics sem Secure, HttpOnly e SameSite: AMP_TOKEN (Google Analytics, contem 'token'), s_sess (Adobe Analytics, contem 'sess') e _pin_unauth (tag do Pinterest, contem 'auth'). Nenhum e de sessao. Esperado depois do BUG-22: os tres no card como LOW, sem o achado INSECURE_COOKIES e sem indicio COOKIES no painel 'O que esta em jogo'."
+  }
+}
