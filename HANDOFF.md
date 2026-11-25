@@ -1427,20 +1427,17 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
 |---|---|---|
 | 1 | SSRF-03 hex | ✅ `1b1e469`. Vermelho visto no 8099 |
 | 2 | SSRF-07 | ✅ `eb7a861` + `51cecef`. Vermelho visto no 8099 |
-| **3** | **SCAN-01** | **Próximo.** Contrato reconferido em 2026-11-24 (abaixo) |
-| 4 a 22 | SCAN-03, AUTH-05, AUTH-04, SCAN-09... | 🔲, na ordem da tabela |
+| 3 | SCAN-01 | ✅ `ScanMotorTest` (2026-11-24). Vermelho visto com `juice-shop:3999` (422) |
+| **4** | **SCAN-03** | **Próximo.** Ficha 4; reconferir o contrato ao vivo antes de passar |
+| 5 a 22 | AUTH-05, AUTH-04, SCAN-09... | 🔲, na ordem da tabela |
 
-**SCAN-01 (P0), classe nova `ScanMotorTest`:**
-- **Pedido:** `GET /scan?url=http://juice-shop:3000/&active=false`, qa-pro,
-  `Accept-Language: pt-BR`.
-- **Afirmar:** status 200 **e** `httpStatus` 200; nenhum `moduleStatus` diferente de `OK`,
-  fora `CERT_TRANSPARENCY` e `CVE`.
-- **Conferido em 2026-11-24:** `httpStatus` 200 e os 15 módulos OK, em 4 s.
-- **Vermelho:** `http://juice-shop:3999/` (porta fechada) → 422 `TARGET_UNREACHABLE`.
-- **Dica já dada ao dono:** `moduleStatus` é um objeto, não uma lista. Dá para extrair
-  com `.extract().jsonPath().getMap("moduleStatus")` e afirmar com JUnit.
-
-Detalhes na ficha 3.
+**O que a revisão do SCAN-01 ensinou (vale para os próximos SCAN):**
+- **Mande o esquema da ficha.** Com `https://juice-shop:3000/` o teste ficava verde mesmo assim:
+  o backend tenta HTTPS, falha e cai para `http://` (`finalUrl` mostra). O verde passava pelo
+  fallback, não pelo pedido `http://` que o caso prova.
+- **Afirme que a coleção existe e não está vazia antes do laço.** Um `if (x != null)` em volta
+  da asserção, ou um mapa `{}`, deixa o teste verde sem conferir nada. Sem o campo, uma
+  `NullPointerException` vira *error* no relatório, não *failure*.
 
 **Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
 `playwright/`, e começa pela Etapa P0 (decisões).
@@ -1491,6 +1488,10 @@ curl http://localhost:8099/actuator/health
 - Os stubs do WireMock que estão em arquivo carregam sozinhos quando o container sobe.
 - Depois de rodar a suíte inteira, reinicie o backend (`docker restart env-backend-1`).
   Isso devolve a cota do qa-free, que fica em memória.
+- **Máquina nova (sem a imagem antiga do 8099):** o 8099 é o Backend `4ed5f34`, o último commit
+  antes do fix do BUG-01. Recrie sem mexer no checkout, a partir de `cyberaudit-qa/`:
+  `git -C ../Backend archive 4ed5f34 | docker build -t env-backend-noallowlist -`. Depois suba
+  sempre com `--no-build`: um `up --build` sem nomear o serviço refaz o 8099 do HEAD.
 
 ### Armadilhas novas (2026-11-24)
 
