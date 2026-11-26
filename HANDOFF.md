@@ -1,6 +1,6 @@
 # HANDOFF — cyberaudit-qa (para colar no próximo chat)
 
-> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-01), como o chat
+> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (AUTH-05), como o chat
 > trabalha e a primeira mensagem sugerida. As seções 1 a 12 são histórico.
 
 Atualizado em 2026-10-03, porque a janela de contexto do chat anterior encheu.
@@ -1413,13 +1413,14 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
 
 - **Bugs:** BUG-01 a BUG-22 corrigidos, cada um com regressão no Backend. Nenhum aberto em
   `docs/bugs/`.
-- **Repositórios limpos, nada a commitar:**
+- **Repositórios:**
   - Backend `11fd610` (suíte 987, verde);
   - Frontend `a88d471`;
-  - cyberaudit-qa `51cecef`.
+  - cyberaudit-qa: o commit do SCAN-03 (2026-11-25) vem depois de `616dbd5`.
 - **Suíte RestAssured do dono (2026-11-24):** 52 testes, 1 falha, 1 pulado.
   - A falha é o PLAN-02, que espera o contrato antigo (ver "Correções pendentes" abaixo).
-  - O pulado é o SCAN-03, ainda com o `@Disabled` do BUG-03. Ele volta no caso 4 da fila.
+  - O pulado era o SCAN-03. Em 2026-11-25 ele virou três testes, sem `@Disabled`, e a classe
+    está verde no 8081. A suíte inteira não foi rodada de novo: a conta esperada é 54 / 1 / 0.
 
 ### A fila: 22 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
 
@@ -1428,8 +1429,9 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
 | 1 | SSRF-03 hex | ✅ `1b1e469`. Vermelho visto no 8099 |
 | 2 | SSRF-07 | ✅ `eb7a861` + `51cecef`. Vermelho visto no 8099 |
 | 3 | SCAN-01 | ✅ `ScanMotorTest` (2026-11-24). Vermelho visto com `juice-shop:3999` (422) |
-| **4** | **SCAN-03** | **Próximo.** Ficha 4; reconferir o contrato ao vivo antes de passar |
-| 5 a 22 | AUTH-05, AUTH-04, SCAN-09... | 🔲, na ordem da tabela |
+| 4 | SCAN-03 | ✅ `ScanAtivoJuiceShopTest`, três testes (2026-11-25). Vermelho visto: XSS apontado para o `eco-escapado-mock` e controle apontado para o `eco-mock` |
+| **5** | **AUTH-05** | **Próximo.** Ficha 5; reconferir o contrato ao vivo antes de passar. O vermelho é no 8099 |
+| 6 a 22 | AUTH-04, SCAN-09, SCAN-07... | 🔲, na ordem da tabela |
 
 **O que a revisão do SCAN-01 ensinou (vale para os próximos SCAN):**
 - **Mande o esquema da ficha.** Com `https://juice-shop:3000/` o teste ficava verde mesmo assim:
@@ -1438,6 +1440,19 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
 - **Afirme que a coleção existe e não está vazia antes do laço.** Um `if (x != null)` em volta
   da asserção, ou um mapa `{}`, deixa o teste verde sem conferir nada. Sem o campo, uma
   `NullPointerException` vira *error* no relatório, não *failure*.
+
+**O que a revisão do SCAN-03 ensinou (2026-11-25):**
+- **`Actual: null` quase sempre é caminho ou campo errado.** O GPath devolve `null` para
+  caminho que não existe, sem erro. Aconteceu com `issues.name` (o certo é
+  `score.issues.id`) e com `reflectXssSuspected`.
+- **Closure no GPath precisa de método na frente:** `score.issues.find { it.id == '…' }`.
+  Sem o `find`, o Groovy procura um método `issues()`, e o teste dá *error* com "No
+  signature of method".
+- **O RestAssured para no primeiro `.body()` que falha.** Os erros de trás só aparecem
+  depois de corrigir o da frente.
+- **Asserção de ausência passa com caminho errado.** `not(hasItem(...))` sobre `null` dá
+  verde: medido trocando `score.issues.id` por `score.issue.id` no controle. Afirmar antes
+  que a lista não está vazia fecha isso (sugestão dada ao dono, não bloqueou).
 
 **Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
 `playwright/`, e começa pela Etapa P0 (decisões).
@@ -1507,6 +1522,6 @@ curl http://localhost:8099/actuator/health
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-01 (ficha 3): reconfira o
+> seguir a fila das fichas no ritmo da §13. O próximo é o AUTH-05 (ficha 5): reconfira o
 > contrato ao vivo e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.

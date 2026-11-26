@@ -252,6 +252,10 @@ apontado para `eco-escapado-mock` falha (false).
 `eco-escapado-mock` → `xssProbePerformed` true, XSS false, sem issue. O diário do WireMock
 mostra a sonda chegando nos dois (`/busca?q=applecyberaudit<id><">`).
 
+**Conferido de novo em 2026-11-25** (Backend `11fd610`). A tabela inteira, com `url` = a
+pedida nos três e as duas notas acima. Tempos: SQLi 21 s, XSS 22 s, controle 5 s. qa-pro no
+ativo → 403 `ACCOUNT_DOMAIN_NOT_VERIFIED`.
+
 ---
 
 ### 5. AUTH-05 (P1) · `ApiKeyRevogadaTest`
