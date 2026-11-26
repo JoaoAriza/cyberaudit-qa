@@ -1445,7 +1445,7 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 5 | AUTH-05 | ✅ `a6c67d0` + `80a0388` (2026-11-26). Vermelho visto no 8099 pelo dono: o controle dá 401 em vez de 200 |
 | 6 | AUTH-04 | ✅ `AuthTotpReplayTest` (2026-11-26), qa-free, lib `dev.samstevens.totp` no pom. Vermelho visto no 8099: o replay do passo 4 dá 200 |
 | 7 | SCAN-09 | ✅ `LaudoStubsTest` (2026-11-26), três rodadas de revisão. Vermelho visto com mapeamento temporário que lista o `XSRF-TOKEN` (tamanho 5; sem a linha do tamanho, a ausência pega) |
-| **8** | **SCAN-07** | **Próximo.** Ficha 8 (`DnsFalsoTest`); reconferir o contrato ao vivo antes de passar |
+| **8** | **SCAN-07** | **Passado ao dono em 2026-11-26**, com o contrato reconferido ao vivo (ficha 8). Classe nova `DnsFalsoTest`, primeiro `@CsvSource`. Vermelho: inverter uma expectativa (o 8099 barra o DNS falso) |
 | 9 a 22 | SCAN-05, SCAN-08, SCAN-11... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |

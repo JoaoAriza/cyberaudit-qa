@@ -473,10 +473,35 @@ Campos em `dnsSecurityResult`.
   responder, o risco vira `UNKNOWN` sem nota, e "LOW sem nota" passaria à toa.
 - O texto da nota vem do catálogo, nos dois idiomas igual ("DNS Security (email spoofing
   risk …)"), mas afirme pelo fim (`-6`/`-12`).
+- **`@CsvSource` é novo nas suas classes** (até aqui só `@ValueSource`). Cada linha do CSV
+  é uma execução; o JUnit separa os valores pela vírgula e entrega na ordem dos parâmetros
+  do método. **Coluna vazia chega como `null`**, não como texto vazio: as linhas LOW não têm
+  nota nem issue, e um `equalTo(severidade)` com `null` não é "ausência". Decida como o
+  teste trata essas linhas: uma coluna a mais, ou dois métodos (com issue e sem issue).
+- **As linhas LOW são asserções de ausência** (lição do SCAN-09): o id tem de ser exatamente
+  `DNS_EMAIL_SPOOFING`, copiado da resposta. Um nome errado deixa as duas linhas LOW
+  verdes para sempre.
+- O Hamcrest combina matchers: `hasItem` aceita outro matcher dentro (`startsWith`,
+  `endsWith`, `allOf`). Assim dá para procurar "a nota que começa com DNS Security" na lista
+  `score.notes` sem depender da posição dela.
+- O 8099 não serve: ele não tem allowlist e barra os domínios do DNS falso.
+
+**Por que cada linha dá o que dá** (registros em `env/coredns/dns-mock.test.db`):
+- `quarantine`: `p=quarantine`, sem `pct` → 100% das mensagens falsas vão para a quarentena.
+  É o caso do bug: antes do fix saía MEDIUM, -6.
+- `quarantine-pct50`: só metade vai para a quarentena; a outra metade chega à caixa de entrada.
+- `reject-pct25`: pela RFC 7489, o que fica fora do `pct` de um `reject` cai em `quarantine`.
+  Toda mensagem falsa é barrada de algum jeito → LOW.
+- `spf-mais-all`: `+all` autoriza qualquer servidor. O e-mail falso passa no SPF e, por isso,
+  até no `p=reject`. Antes do fix saía MEDIUM, -6. O `summary` cita o `+all`.
+- `dmarc-none`: `p=none` não manda barrar nada.
 
 **Ver o vermelho.** Imagem do commit `9f9e84e` (antes do BUG-10): `quarantine` sai MEDIUM.
+Sem buildar, inverta uma expectativa uma vez (por exemplo, `quarantine` → MEDIUM).
 
-**Conferido em 2026-11-15.** A tabela inteira.
+**Conferido em 2026-11-15. Reconferido ao vivo em 2026-11-26** (Backend `11fd610`, qa-pro,
+pt-BR): a tabela inteira, com `httpStatus` 200 e `lookupFailed` false nos cinco. Notas exatas:
+"DNS Security (email spoofing risk MEDIUM): -6" e "DNS Security (email spoofing risk HIGH): -12".
 
 ---
 
