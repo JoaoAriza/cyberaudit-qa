@@ -35,6 +35,10 @@ module.exports = defineConfig({
       userIdPro: 'b0000000-0000-0000-0000-000000000090',
       userIdEnterprise: 'b0000000-0000-0000-0000-00000000e9e9',
       userIdFree: 'b0000000-0000-0000-0000-00000000f1ee',
+      // AUTH-04 na tela: conta dedicada ao replay de TOTP (env/seed.sql). Cada codigo
+      // vale uma vez por usuario; conta propria evita colidir com o AUTH-04 do
+      // RestAssured (qa-free) e o UI-01 (qa-pro) na mesma janela de 30 s da CI.
+      emailAuth04Ui: 'qa-auth04-ui@cyberaudit.test',
       // PAY-11 (Pix na tela): conta FREE dedicada que vira PRO no fluxo de upgrade.
       // accountIdPay11 é usado pelo cy.task('resetFree') pra devolver a conta a FREE
       // antes de cada run (o checkout muta o plano e persiste). Semeada em env/seed.sql.

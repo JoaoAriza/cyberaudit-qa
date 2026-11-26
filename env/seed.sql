@@ -231,3 +231,19 @@ INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
    '$2a$12$MOSJU8sFnD8zZKGbvBgA3OdKOVfQ08BUFB/ybHUnXivlrckV36Ybe', 'OWNER', true, now(),
    'a0000000-0000-0000-0000-000000000011', true, now(), 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', true, false)
 ON CONFLICT (email) DO NOTHING;
+-- ── AUTH-04 na tela (Cypress): conta FREE dedicada ao replay de TOTP pela tela ──
+-- Cada código TOTP vale uma vez POR USUÁRIO (BUG-04). Na CI as suítes rodam em
+-- sequência no mesmo backend: o AUTH-04 do RestAssured usa a qa-free e o UI-01 do
+-- Cypress usa a qa-pro. Uma conta própria evita que um código já gasto por outra suíte
+-- na mesma janela de 30 s quebre o controle positivo deste caso. Mesmo password/TOTP
+-- de teste das outras contas (Regra 4).
+INSERT INTO accounts (id, type, plan, display_name, full_name, created_at, require2fa) VALUES
+  ('a0000000-0000-0000-0000-000000000a04', 'INDIVIDUAL', 'FREE', 'QA Auth04 UI', 'QA Auth04 UI', now(), false)
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO app_users (id, name, email, password_hash, role, active, created_at,
+                       account_id, terms_accepted, terms_accepted_at,
+                       totp_secret, totp_enabled, email_otp_enabled) VALUES
+  ('b0000000-0000-0000-0000-000000000a04', 'QA Auth04 UI', 'qa-auth04-ui@cyberaudit.test',
+   '$2a$12$MOSJU8sFnD8zZKGbvBgA3OdKOVfQ08BUFB/ybHUnXivlrckV36Ybe', 'OWNER', true, now(),
+   'a0000000-0000-0000-0000-000000000a04', true, now(), 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', true, false)
+ON CONFLICT (email) DO NOTHING;

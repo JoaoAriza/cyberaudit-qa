@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "/",
+    "headers": {
+      "Host": { "matches": "lento-mock(:[0-9]+)?" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "fixedDelayMilliseconds": 10000,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8"
+    },
+    "body": "<!doctype html><html><head><title>lento-mock</title></head><body><p>Alvo de teste: responde a raiz depois de 10 s.</p></body></html>"
+  },
+  "metadata": {
+    "caso": "SCAN-02",
+    "nota": "Responde so para o Host lento-mock, so na raiz, e so depois de 10 s. A busca principal do scan (HttpFetchService) desiste em 8 s: a conexao abriu e a resposta nao veio. Nao e 'sem conexao', entao o scan segue (nao e o 422 do SCAN-13) e marca HTTP_FETCH como ERROR, com os headers nao verificados. Os outros caminhos (robots.txt, security.txt...) caem no 404 padrao, rapido."
+  }
+}

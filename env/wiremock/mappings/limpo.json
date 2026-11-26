@@ -1,0 +1,75 @@
+{
+  "mappings": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "/",
+        "headers": {
+          "Host": { "matches": "limpo-mock(:[0-9]+)?" }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "text/html; charset=utf-8",
+          "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+          "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
+          "X-Frame-Options": "DENY",
+          "X-Content-Type-Options": "nosniff",
+          "Referrer-Policy": "strict-origin-when-cross-origin",
+          "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
+        },
+        "body": "<!doctype html><html><head><title>limpo-mock</title></head><body><p>Alvo de teste: headers de seguranca certos.</p></body></html>"
+      },
+      "metadata": {
+        "caso": "SCAN-04",
+        "nota": "Responde so para o Host limpo-mock, so na raiz e so no GET (outro metodo cai no 404 padrao, para a sonda de metodos perigosos nao achar nada). Os seis headers de seguranca no valor que o HeaderService chama de OK: HSTS com max-age de 1 ano (o minimo e 30 dias), CSP sem unsafe-inline/unsafe-eval, X-Frame-Options DENY, nosniff, Referrer-Policy fora de unsafe-url/no-referrer-when-downgrade, Permissions-Policy presente. Sem Server, sem cookie, sem robots.txt. O security.txt esta no stub abaixo. Sem HTTPS, como todo stub: o SSL continua custando."
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/",
+        "headers": {
+          "Host": { "matches": "critico-mock(:[0-9]+)?" }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "text/html; charset=utf-8",
+          "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+          "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
+          "X-Frame-Options": "DENY",
+          "X-Content-Type-Options": "nosniff",
+          "Referrer-Policy": "strict-origin-when-cross-origin",
+          "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+          "Set-Cookie": "auth_token=eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJxYS1zY29yZS0wMSIsImV4cCI6NDEwMjQ0NDgwMH0.; Path=/; Secure; HttpOnly; SameSite=Strict"
+        },
+        "body": "<!doctype html><html><head><title>critico-mock</title></head><body><p>Alvo de teste: limpo, com um JWT alg:none.</p></body></html>"
+      },
+      "metadata": {
+        "caso": "SCORE-01",
+        "nota": "O mesmo alvo do limpo-mock, mais um cookie com JWT de alg none (header {alg:none,typ:JWT}, payload {sub:qa-score-01, exp:2100-01-01}, assinatura vazia). E o unico achado CRITICAL: JWT_CRITICAL, -15. O cookie tem Secure, HttpOnly e SameSite=Strict, para a analise de cookies nao achar nada nele. O exp longe evita o achado de JWT sem expiracao."
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/.well-known/security.txt",
+        "headers": {
+          "Host": { "matches": "(limpo|critico)-mock(:[0-9]+)?" }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "text/plain; charset=utf-8" },
+        "body": "Contact: mailto:security@limpo-mock.test\nExpires: 2030-01-01T00:00:00.000Z\n"
+      },
+      "metadata": {
+        "caso": "SCAN-04 e SCORE-01",
+        "nota": "security.txt com o campo Contact, que o SecurityTxtService exige. Sem ele, os dois alvos levariam SECURITY_TXT_MISSING (LOW)."
+      }
+    }
+  ]
+}

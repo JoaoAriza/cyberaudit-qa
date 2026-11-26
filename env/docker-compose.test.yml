@@ -78,9 +78,12 @@ services:
       # pesos-mock: alias do WireMock só com achados LOW de higiene (SCAN-10/BUG-14).
       # textos-mock: alias do WireMock com HSTS max-age=0 (SCAN-11/BUG-15).
       # eco-mock, eco-escapado-mock: aliases do WireMock que ecoam o parâmetro q (SCAN-03, XSS).
+      # limpo-mock: alias do WireMock com todos os headers de segurança certos (SCAN-04).
+      # critico-mock: o mesmo alvo limpo com um JWT alg:none em cookie (SCORE-01).
+      # lento-mock: alias do WireMock que demora 10 s para responder a raiz (SCAN-02).
       # *.dns-mock.test: alvos do DNS falso (SCAN-06/BUG-09, SCAN-07/BUG-10) — ver o
       # serviço coredns abaixo. A allowlist é por nome exato, por isso a lista inteira.
-      SSRF_TEST_ALLOWLIST: juice-shop,wiremock,redirect-mock,php-banner-mock,sem-hsts-mock,cookies-mock,pesos-mock,textos-mock,eco-mock,eco-escapado-mock,dkim-hostinger.dns-mock.test,dkim-revogado.dns-mock.test,dkim-curinga.dns-mock.test,quarantine.dns-mock.test,quarantine-pct50.dns-mock.test,reject-pct25.dns-mock.test,spf-mais-all.dns-mock.test,dmarc-none.dns-mock.test
+      SSRF_TEST_ALLOWLIST: juice-shop,wiremock,redirect-mock,php-banner-mock,sem-hsts-mock,cookies-mock,pesos-mock,textos-mock,eco-mock,eco-escapado-mock,limpo-mock,critico-mock,lento-mock,dkim-hostinger.dns-mock.test,dkim-revogado.dns-mock.test,dkim-curinga.dns-mock.test,quarantine.dns-mock.test,quarantine-pct50.dns-mock.test,reject-pct25.dns-mock.test,spf-mais-all.dns-mock.test,dmarc-none.dns-mock.test
       # DNS falso: o módulo de DNS (dnsjava) pergunta SPF/DMARC/MX/DKIM ao CoreDNS em
       # vez do DNS do Docker. dns.server é lido pelo dnsjava; o resto da JVM (HTTP,
       # SsrfGuard) segue no DNS do Docker. JAVA_TOOL_OPTIONS soma ao JAVA_OPTS da
@@ -210,6 +213,9 @@ services:
     # "textos-mock": o SCAN-11 (BUG-15) — stub textos.json, HSTS max-age=0.
     # "eco-mock" / "eco-escapado-mock": o SCAN-03 (XSS) — stub eco.json, o mesmo eco
     # do parâmetro q, cru num e escapado no outro (controle negativo).
+    # "limpo-mock" / "critico-mock": o SCAN-04 e o SCORE-01 — stub limpo.json, headers de
+    # segurança certos nos dois; o critico-mock acrescenta um JWT alg:none (CRITICAL).
+    # "lento-mock": o SCAN-02 — stub lento.json, a raiz responde depois de 10 s.
     # *.dns-mock.test: os alvos do DNS falso (SCAN-06, SCAN-07). O alias dá o A (o
     # HTTP do scan cai aqui, stub dns-mock.json); os registros de email vêm do coredns.
     networks:
@@ -223,6 +229,9 @@ services:
           - textos-mock
           - eco-mock
           - eco-escapado-mock
+          - limpo-mock
+          - critico-mock
+          - lento-mock
           - dkim-hostinger.dns-mock.test
           - dkim-revogado.dns-mock.test
           - dkim-curinga.dns-mock.test
