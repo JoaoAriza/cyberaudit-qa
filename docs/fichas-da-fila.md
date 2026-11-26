@@ -331,10 +331,21 @@ cima do ombro, num log, num proxy) não consegue abrir uma segunda sessão com e
 - Dependência nova no `pom.xml` do RestAssured, escopo `test`:
   `dev.samstevens.totp:totp:1.7.1`. É a mesma família que o Backend usa (lá é o starter do
   Spring; aqui é a lib pura). Conceito: o pom é a lista de bibliotecas que o Maven baixa. Sem
-  a linha, o `import` não compila.
+  a linha, o `import` não compila. O jar já está no `~/.m2` (o Backend baixou), e a lib traz
+  junto o `commons-codec`.
+- **O pom tem dois blocos `<dependencies>`.** O de cima, logo depois das `<properties>`, é o
+  do projeto: é nele que a linha entra. O de baixo fica dentro do `maven-surefire-plugin` e
+  lista o que o plugin usa. Uma dependência `test` lá dentro nem deixa o Maven ler o pom:
+  "dependency.scope ... must be one of [compile, runtime, system] but is 'test'" (conferido
+  em 2026-11-26).
 - Gerar o código: `DefaultCodeGenerator` com `HashingAlgorithm.SHA1`, método
   `generate(segredo, contador)`. O contador é `segundos desde 1970 / 30`, que é a janela
   de 30 s.
+- **`generate` lança exceção checada** (`CodeGenerationException`). Conceito: em Java,
+  quem chama um método que declara `throws` de uma exceção checada tem de tratá-la ou
+  repassá-la. Sem isso, o código não compila ("unreported exception ... must be caught or
+  declared to be thrown"). Num teste, o comum é repassar: `throws Exception` na assinatura
+  do método. Se ela acontecer, o JUnit mostra como *error*.
 - Segredo de teste: o do `env/seed.sql` (o mesmo do `totpSecret` do `cypress.config.js`). Ponha
   no `config.properties` (Regra 4: só valor de teste).
 - Conta **qa-free** (login real, senha do seed). O UI-01 do Cypress já loga como qa-pro.
@@ -348,20 +359,39 @@ cima do ombro, num log, num proxy) não consegue abrir uma segunda sessão com e
    utilizado. Aguarde o próximo código no aplicativo.".
 5. Sem `code` → 422 "Código TOTP inválido." (é o "sem código" da matriz).
 
+**O que mais a resposta traz** (conferido em 2026-11-26, se quiser afirmar):
+- passo 1: `user` null e `twoFactorMethods` `["TOTP"]`;
+- passo 3: `requires2fa` false e `user.email` igual ao do qa-free;
+- 422: o texto vem em `message`; o `error` é `422 UNPROCESSABLE_ENTITY`;
+- o token pré-auth não abre sessão: `GET /auth/me` com ele dá **403**. Com o token do
+  passo 3, dá 200.
+
 **Armadilhas.**
-- **A janela pode virar entre gerar e usar.** Se faltar menos de ~5 s para virar a janela,
-  espere a próxima antes de gerar o N. O replay só é replay se for o mesmo código.
-- Rodar o teste duas vezes em menos de 30 s quebra o passo 3 da segunda execução (o N já foi
-  usado). Não é bug.
-- Throttle: 5 falhas → 429 por 15 min para o usuário. A ordem acima (falha, sucesso, falha,
-  falha) não chega lá, porque um sucesso zera a contagem. `restart backend` também zera.
+- **A virada da janela não quebra o teste** (corrige o que esta ficha dizia em 2026-11-15).
+  O backend aceita o código da janela atual, da anterior e da seguinte, para compensar
+  relógio fora de hora. Medido: o código da janela anterior entra (200). O N gerado antes
+  da virada continua valendo no passo 3, e o replay do passo 4 continua sendo do mesmo
+  código. Não precisa esperar janela nenhuma.
+- **Duas execuções na mesma janela de 30 s:** a segunda gera o mesmo N, que já foi usado, e
+  o passo 3 dela leva 422 "já utilizado". Não é bug. Na janela seguinte o N é outro.
+- **Throttle: 5 falhas seguidas → 429 por 15 min**, com "Muitas tentativas de verificação
+  2FA". A contagem só zera com um sucesso, com os 15 min do bloqueio ou com
+  `docker restart env-backend-1`: ela não expira sozinha.
+  - Cada execução verde deixa 2 falhas na conta (passos 4 e 5). A próxima soma mais uma no
+    passo 2 e zera no passo 3.
+  - Enquanto o teste estiver quebrado antes do passo 3, cada execução soma 1 ou 2. Na
+    terceira ou quarta, o passo 2 já leva 429.
+  - Se aparecer o 429, é o throttle, não o seu código: reinicie o backend e rode de novo.
 - Na CI, RestAssured → Newman → Cypress rodam no mesmo backend. Usuários diferentes evitam
   colisão de janela. Não troque para o qa-pro.
 
 **Ver o vermelho.** `base.uri.noAllowlist`: o passo 4 dá 200 (BUG-04). Mesmo banco, mesmo
 usuário.
 
-**Conferido em 2026-11-15.** Os cinco passos com os status e mensagens acima.
+**Conferido em 2026-11-15. Reconferido ao vivo em 2026-11-26** (Backend `11fd610`, qa-free):
+os cinco passos com os status e mensagens acima. No 8099, o passo 4 dá 200 e os outros
+quatro iguais. Depois da conferência, o backend do 8081 foi reiniciado e o throttle do
+qa-free começa do zero.
 
 ---
 
@@ -1298,9 +1328,10 @@ prova que a tela mostra a recusa em vez de travar ou entrar.
 - **Não chame o `cy.task('totp')` de novo no passo 4.** Se a janela virou, ele devolve outro
   código, que vale. O teste entra no dashboard, e o replay não foi testado.
 - **A janela pode virar entre o passo 2 e o 4.** Não muda nada: o código guardado continua
-  usado. Mas gere o do passo 2 com folga: se faltar menos de ~5 s para virar, espere.
-- Rodar duas vezes em menos de 30 s quebra o passo 2 da segunda execução (código já usado).
-  Não é bug.
+  usado. Também não precisa de folga no passo 2: o backend aceita o código da janela
+  anterior (medido em 2026-11-26, ficha 6).
+- Rodar duas vezes na mesma janela de 30 s quebra o passo 2 da segunda execução (código já
+  usado). Não é bug.
 - A mensagem vem do backend; o `support/e2e.js` fixa pt-BR. Afirme o começo do texto.
 - Throttle do 2FA: 5 falhas → 429 por 15 min. Cada execução tem um sucesso antes da falha,
   e o sucesso zera a contagem. O login só conta falhas de senha.

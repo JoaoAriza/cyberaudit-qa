@@ -1441,7 +1441,7 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 3 | SCAN-01 | ✅ `ScanMotorTest` (2026-11-24). Vermelho visto com `juice-shop:3999` (422) |
 | 4 | SCAN-03 | ✅ `ScanAtivoJuiceShopTest`, três testes (2026-11-25). Vermelho visto: XSS apontado para o `eco-escapado-mock` e controle apontado para o `eco-mock` |
 | 5 | AUTH-05 | ✅ `a6c67d0` + `80a0388` (2026-11-26). Vermelho visto no 8099 pelo dono: o controle dá 401 em vez de 200 |
-| **6** | **AUTH-04** | **Próximo.** Ficha 6; reconferir o contrato ao vivo antes de passar. Pede a lib TOTP no pom e usa a conta qa-free. O vermelho é no 8099 |
+| **6** | **AUTH-04** | **Passado ao dono em 2026-11-26**, com o contrato reconferido ao vivo (ficha 6). Pede a lib TOTP no pom e usa a conta qa-free. O vermelho é no 8099 (passo 4 → 200) |
 | 7 a 22 | SCAN-09, SCAN-07, SCAN-05... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
