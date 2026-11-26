@@ -1,6 +1,6 @@
 # HANDOFF — cyberaudit-qa (para colar no próximo chat)
 
-> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (AUTH-04), como o chat
+> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-09), como o chat
 > trabalha e a primeira mensagem sugerida. As seções 1 a 12 são histórico.
 
 Atualizado em 2026-10-03, porque a janela de contexto do chat anterior encheu.
@@ -1426,8 +1426,9 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
 - **Suíte RestAssured do dono (2026-11-24):** 52 testes, 1 falha, 1 pulado.
   - A falha é o PLAN-02, que espera o contrato antigo (ver "Correções pendentes" abaixo).
   - O pulado era o SCAN-03. Em 2026-11-25 ele virou três testes, sem `@Disabled`, e a classe
-    está verde no 8081. Em 2026-11-26 entrou o AUTH-05 (um teste, verde). A suíte inteira
-    não foi rodada de novo: a conta esperada é 55 / 1 / 0.
+    está verde no 8081. Em 2026-11-26 entraram o AUTH-05 e o AUTH-04 (um teste cada).
+  - **Suíte inteira rodada de novo em 2026-11-26, com o AUTH-04: 57 testes, 1 falha (o
+    PLAN-02), 0 pulados**, em 49 s. O backend foi reiniciado depois.
 
 ### A fila: 33 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
 
@@ -1441,8 +1442,9 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 3 | SCAN-01 | ✅ `ScanMotorTest` (2026-11-24). Vermelho visto com `juice-shop:3999` (422) |
 | 4 | SCAN-03 | ✅ `ScanAtivoJuiceShopTest`, três testes (2026-11-25). Vermelho visto: XSS apontado para o `eco-escapado-mock` e controle apontado para o `eco-mock` |
 | 5 | AUTH-05 | ✅ `a6c67d0` + `80a0388` (2026-11-26). Vermelho visto no 8099 pelo dono: o controle dá 401 em vez de 200 |
-| **6** | **AUTH-04** | **Passado ao dono em 2026-11-26**, com o contrato reconferido ao vivo (ficha 6). Pede a lib TOTP no pom e usa a conta qa-free. O vermelho é no 8099 (passo 4 → 200) |
-| 7 a 22 | SCAN-09, SCAN-07, SCAN-05... | 🔲, na ordem da tabela |
+| 6 | AUTH-04 | ✅ `AuthTotpReplayTest` (2026-11-26), qa-free, lib `dev.samstevens.totp` no pom. Vermelho visto no 8099: o replay do passo 4 dá 200 |
+| **7** | **SCAN-09** | **Próximo.** Ficha 7; reconferir o contrato ao vivo antes de passar |
+| 8 a 22 | SCAN-07, SCAN-05, SCAN-08... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
 | 30 a 33 | PAY-14 (Cypress), UI-01 e UI-02 (Selenium), DOM-02 | 🔲 Começam por decisão do dono (fichas 30 a 33) |
@@ -1479,6 +1481,18 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 - **Teste que cria estado no servidor limpa no `@AfterEach`.** O vermelho do 8099 para no
   passo 2, antes da revogação. Sem a limpeza, cada vermelho deixaria uma chave ativa no
   qa-pro. Zerar o id depois do `DELETE` do próprio teste evita revogar duas vezes.
+
+**O que a revisão do AUTH-04 ensinou (2026-11-26):**
+- **Placeholder no `config.properties` não é segredo protegido, é teste quebrado.** Com
+  `totpSecret=SEU_SEGREDO_AQUI` o código gerado não bate e o passo 3 dá 422. Valor só de teste
+  (o do seed) pode ficar no arquivo, pela Regra 4; variável de ambiente é para a CI.
+- **O ponto final de novo.** Duas mensagens sem o `.` do fim; a segunda só aparece depois de
+  corrigir a primeira, porque o RestAssured para no primeiro `.body()` que falha.
+- **Código inválido com o formato certo.** `00000` (5 dígitos) também dá 422, mas nunca bateria
+  com código nenhum; `000000` tem o formato de um código de verdade, e quem reprova é a
+  comparação com o segredo.
+- **Teste quebrado antes do passo 3 enche o throttle do 2FA:** 2 falhas por execução, 429 na
+  terceira seguida. `docker restart env-backend-1` zera. Entre duas execuções verdes, 30 s.
 
 **Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
 `playwright/`, e começa pela Etapa P0 (decisões).
@@ -1540,15 +1554,15 @@ curl http://localhost:8099/actuator/health
   público. Nunca rode o octal no 8099 (está na ficha 1).
 - **8099 e metadata de nuvem:** o vermelho do SSRF-07 no 8099 usa só `127.0.0.1:8081` e
   `127.0.0.1#`. O `169.254.169.254:80` faria o servidor antigo tentar conectar de verdade.
-- **Quando refazer a imagem do 8099:** ela continua antiga até o dono ver os vermelhos do
-  AUTH-05 e do AUTH-04 (fichas, seção 0). Só depois disso ela é refeita. O do AUTH-05 foi
-  visto em 2026-11-26; falta o do AUTH-04.
+- **Quando refazer a imagem do 8099:** ainda não. Os vermelhos do AUTH-05 e do AUTH-04 já foram
+  vistos (2026-11-26), mas a fila ainda usa a imagem antiga no PLAN-03 (#15, qa-free → 201),
+  no PLAN-04 (#16) e no RATE-01 (#19, 200 nas 8 chamadas). Só depois deles ela é refeita.
 - **Mensagem de commit:** sempre `tipo(escopo): descricao`. O `51cecef` ("ajustes de escrita
   SSRF-07") saiu fora do padrão.
 
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O próximo é o AUTH-04 (ficha 6): reconfira o
+> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-09 (ficha 7): reconfira o
 > contrato ao vivo e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.
