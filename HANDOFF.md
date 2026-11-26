@@ -1440,7 +1440,7 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 2 | SSRF-07 | ✅ `eb7a861` + `51cecef`. Vermelho visto no 8099 |
 | 3 | SCAN-01 | ✅ `ScanMotorTest` (2026-11-24). Vermelho visto com `juice-shop:3999` (422) |
 | 4 | SCAN-03 | ✅ `ScanAtivoJuiceShopTest`, três testes (2026-11-25). Vermelho visto: XSS apontado para o `eco-escapado-mock` e controle apontado para o `eco-mock` |
-| 5 | AUTH-05 | ✅ `ApiKeyRevogadaTest` (2026-11-26). Vermelho conferido no 8099 numa cópia: o controle dá 401 em vez de 200. O dono vê esse vermelho trocando o `base.uri` local, sem commitar a troca |
+| 5 | AUTH-05 | ✅ `a6c67d0` + `80a0388` (2026-11-26). Vermelho visto no 8099 pelo dono: o controle dá 401 em vez de 200 |
 | **6** | **AUTH-04** | **Próximo.** Ficha 6; reconferir o contrato ao vivo antes de passar. Pede a lib TOTP no pom e usa a conta qa-free. O vermelho é no 8099 |
 | 7 a 22 | SCAN-09, SCAN-07, SCAN-05... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
@@ -1541,7 +1541,8 @@ curl http://localhost:8099/actuator/health
 - **8099 e metadata de nuvem:** o vermelho do SSRF-07 no 8099 usa só `127.0.0.1:8081` e
   `127.0.0.1#`. O `169.254.169.254:80` faria o servidor antigo tentar conectar de verdade.
 - **Quando refazer a imagem do 8099:** ela continua antiga até o dono ver os vermelhos do
-  AUTH-05 e do AUTH-04 (fichas, seção 0). Só depois disso ela é refeita.
+  AUTH-05 e do AUTH-04 (fichas, seção 0). Só depois disso ela é refeita. O do AUTH-05 foi
+  visto em 2026-11-26; falta o do AUTH-04.
 - **Mensagem de commit:** sempre `tipo(escopo): descricao`. O `51cecef` ("ajustes de escrita
   SSRF-07") saiu fora do padrão.
 
