@@ -1,1 +1,0 @@
-{"token":"eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJxYS1wcm9AY3liZXJhdWRpdC50ZXN0IiwidXNlcklkIjoiYjAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDkwIiwidHdvRmFjdG9yUGVuZGluZyI6dHJ1ZSwiaWF0IjoxNzk1NjcyMDM2LCJleHAiOjE3OTU2NzIzMzZ9.hsww9wLhilr_aeShuiYMDEp8Bv6bcd3aUqcofQwNcYzjyybhhYybFBio8f-rfn-P","tokenType":"Bearer","user":null,"requires2fa":true,"twoFactorMethods":["TOTP"]}
