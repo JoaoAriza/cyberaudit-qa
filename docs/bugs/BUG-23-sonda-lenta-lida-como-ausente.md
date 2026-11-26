@@ -82,7 +82,10 @@ métodos HTTP, directory listing, source maps, API docs, GraphQL). Não reproduz
 
 ## Correção
 
-Pendente. Pede decisão do dono: o que o laudo diz quando a sonda não respondeu.
+Pendente. Decisão do dono (2026-11-26): corrigir depois da fila das fichas (caso 33),
+antes do Playwright. Na hora do fix, decidir o que o laudo diz quando a sonda não
+respondeu (a proposta é o padrão do BUG-16: `ERROR`, aviso de resultado parcial e
+nenhum achado sobre o arquivo).
 
 ## Teste de regressão
 

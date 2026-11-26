@@ -1,6 +1,6 @@
 # HANDOFF — cyberaudit-qa (para colar no próximo chat)
 
-> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (AUTH-05), como o chat
+> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (AUTH-04), como o chat
 > trabalha e a primeira mensagem sugerida. As seções 1 a 12 são histórico.
 
 Atualizado em 2026-10-03, porque a janela de contexto do chat anterior encheu.
@@ -1413,18 +1413,21 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
 
 - **Bugs:** BUG-01 a BUG-22 corrigidos, cada um com regressão no Backend. **Aberto: BUG-23**
   (P2, 2026-11-26): `security.txt` e `robots.txt` lentos saem como "não encontrado", com o
-  módulo `OK`. Achado na conferência do SCAN-02; pede decisão do dono sobre quando corrigir.
+  módulo `OK`. Achado na conferência do SCAN-02. **Decisão do dono (2026-11-26): corrigir
+  depois da fila**, isto é, depois do caso 33 e antes do Playwright.
 - **Repositórios:**
   - Backend `11fd610` (suíte 987, verde);
   - Frontend `a88d471`;
-  - cyberaudit-qa: SCAN-03 em `3f2e806` + `e290dac`. O bloco 2 (2026-11-26) vem depois.
+  - cyberaudit-qa: SCAN-03 em `3f2e806` + `e290dac`; bloco 2 em `2440e4a` + `2074fbb`;
+    AUTH-05 (2026-11-26) nos commits seguintes.
 - **Ambiente local recriado em 2026-11-26** (`up -d --no-build wiremock backend`, mais
   `up --no-build seeder`) para os aliases e a conta do bloco 2. O restart zerou cota e
   rate limit em memória.
 - **Suíte RestAssured do dono (2026-11-24):** 52 testes, 1 falha, 1 pulado.
   - A falha é o PLAN-02, que espera o contrato antigo (ver "Correções pendentes" abaixo).
   - O pulado era o SCAN-03. Em 2026-11-25 ele virou três testes, sem `@Disabled`, e a classe
-    está verde no 8081. A suíte inteira não foi rodada de novo: a conta esperada é 54 / 1 / 0.
+    está verde no 8081. Em 2026-11-26 entrou o AUTH-05 (um teste, verde). A suíte inteira
+    não foi rodada de novo: a conta esperada é 55 / 1 / 0.
 
 ### A fila: 33 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
 
@@ -1437,8 +1440,9 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 2 | SSRF-07 | ✅ `eb7a861` + `51cecef`. Vermelho visto no 8099 |
 | 3 | SCAN-01 | ✅ `ScanMotorTest` (2026-11-24). Vermelho visto com `juice-shop:3999` (422) |
 | 4 | SCAN-03 | ✅ `ScanAtivoJuiceShopTest`, três testes (2026-11-25). Vermelho visto: XSS apontado para o `eco-escapado-mock` e controle apontado para o `eco-mock` |
-| **5** | **AUTH-05** | **Próximo.** Ficha 5; reconferir o contrato ao vivo antes de passar. O vermelho é no 8099 |
-| 6 a 22 | AUTH-04, SCAN-09, SCAN-07... | 🔲, na ordem da tabela |
+| 5 | AUTH-05 | ✅ `ApiKeyRevogadaTest` (2026-11-26). Vermelho conferido no 8099 numa cópia: o controle dá 401 em vez de 200. O dono vê esse vermelho trocando o `base.uri` local, sem commitar a troca |
+| **6** | **AUTH-04** | **Próximo.** Ficha 6; reconferir o contrato ao vivo antes de passar. Pede a lib TOTP no pom e usa a conta qa-free. O vermelho é no 8099 |
+| 7 a 22 | SCAN-09, SCAN-07, SCAN-05... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
 | 30 a 33 | PAY-14 (Cypress), UI-01 e UI-02 (Selenium), DOM-02 | 🔲 Começam por decisão do dono (fichas 30 a 33) |
@@ -1463,6 +1467,18 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 - **Asserção de ausência passa com caminho errado.** `not(hasItem(...))` sobre `null` dá
   verde: medido trocando `score.issues.id` por `score.issue.id` no controle. Afirmar antes
   que a lista não está vazia fecha isso (sugestão dada ao dono, não bloqueou).
+
+**O que a revisão do AUTH-05 ensinou (2026-11-26):**
+- **`equalTo` compara a string inteira.** A mensagem do 401 é `Autenticação necessária.`,
+  com ponto. Copie o texto da resposta real, não da memória.
+- **Path param precisa do marcador no caminho:** `.delete("/api-keys/{id}", id)`. Sem o
+  `{id}`, o RestAssured recusa o valor que sobrou ("Invalid number of path parameters") e
+  o teste dá *error*: a requisição nem sai.
+- **`"Bearer " + token`, com o espaço.** Sem ele, o backend não lê o token, e a chamada
+  vira anônima. O sintoma é um 401 onde o teste esperava outro código (aqui, 409).
+- **Teste que cria estado no servidor limpa no `@AfterEach`.** O vermelho do 8099 para no
+  passo 2, antes da revogação. Sem a limpeza, cada vermelho deixaria uma chave ativa no
+  qa-pro. Zerar o id depois do `DELETE` do próprio teste evita revogar duas vezes.
 
 **Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
 `playwright/`, e começa pela Etapa P0 (decisões).
@@ -1532,6 +1548,6 @@ curl http://localhost:8099/actuator/health
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O próximo é o AUTH-05 (ficha 5): reconfira o
+> seguir a fila das fichas no ritmo da §13. O próximo é o AUTH-04 (ficha 6): reconfira o
 > contrato ao vivo e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.
