@@ -27,6 +27,15 @@
     </properties>
 
     <dependencies>
+
+        <!--AUTH-04: gera o código TOTP do seed -->
+        <dependency>
+            <groupId>dev.samstevens.totp</groupId>
+            <artifactId>totp</artifactId>
+            <version>1.7.1</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Núcleo: given()/when()/then() + o client HTTP por baixo -->
         <dependency>
             <groupId>io.rest-assured</groupId>
