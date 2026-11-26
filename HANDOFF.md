@@ -1,6 +1,6 @@
 # HANDOFF — cyberaudit-qa (para colar no próximo chat)
 
-> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-07), como o chat
+> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-05), como o chat
 > trabalha e a primeira mensagem sugerida. As seções 1 a 12 são histórico.
 
 Atualizado em 2026-10-03, porque a janela de contexto do chat anterior encheu.
@@ -1429,7 +1429,8 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
     está verde no 8081. Em 2026-11-26 entraram o AUTH-05 e o AUTH-04 (um teste cada).
   - **Suíte inteira rodada de novo em 2026-11-26, com o AUTH-04: 57 testes, 1 falha (o
     PLAN-02), 0 pulados**, em 49 s. O backend foi reiniciado depois. Com o SCAN-09 (um
-    teste, verde sozinho), a conta esperada passa a 58 / 1 / 0.
+    teste, verde sozinho), a conta esperada passa a 58 / 1 / 0. Com o SCAN-07 (cinco
+    execuções do `@CsvSource`), 63 / 1 / 0.
 
 ### A fila: 33 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
 
@@ -1445,8 +1446,9 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 5 | AUTH-05 | ✅ `a6c67d0` + `80a0388` (2026-11-26). Vermelho visto no 8099 pelo dono: o controle dá 401 em vez de 200 |
 | 6 | AUTH-04 | ✅ `AuthTotpReplayTest` (2026-11-26), qa-free, lib `dev.samstevens.totp` no pom. Vermelho visto no 8099: o replay do passo 4 dá 200 |
 | 7 | SCAN-09 | ✅ `LaudoStubsTest` (2026-11-26), três rodadas de revisão. Vermelho visto com mapeamento temporário que lista o `XSRF-TOKEN` (tamanho 5; sem a linha do tamanho, a ausência pega) |
-| **8** | **SCAN-07** | **Passado ao dono em 2026-11-26**, com o contrato reconferido ao vivo (ficha 8). Classe nova `DnsFalsoTest`, primeiro `@CsvSource`. Vermelho: inverter uma expectativa (o 8099 barra o DNS falso) |
-| 9 a 22 | SCAN-05, SCAN-08, SCAN-11... | 🔲, na ordem da tabela |
+| 8 | SCAN-07 | ✅ `DnsFalsoTest` (2026-11-26), duas rodadas de revisão. Vermelho visto invertendo linhas do CSV (`quarantine` MEDIUM, `dmarc-none` sem issue, penalidade -10) |
+| **9** | **SCAN-05** | **Próximo.** Ficha 9 (`LaudoStubsTest`, depende do NVD de verdade: `Assumptions`); reconferir o contrato ao vivo antes de passar |
+| 10 a 22 | SCAN-08, SCAN-11, SCAN-10... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
 | 30 a 33 | PAY-14 (Cypress), UI-01 e UI-02 (Selenium), DOM-02 | 🔲 Começam por decisão do dono (fichas 30 a 33) |
@@ -1510,6 +1512,18 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
   `equalTo("LOW")` no código, no `connect.sid`.
 - **Mapeamento temporário do WireMock simula a regressão** sem a imagem antiga:
   `POST /__admin/mappings` num caminho novo do mesmo host, e `POST /__admin/mappings/reset` no fim.
+
+**O que a revisão do SCAN-07 ensinou (2026-11-26):**
+- **`@CsvSource` com coluna sentinela.** O dono usou `NONE` nas linhas sem issue, em vez da
+  coluna vazia (que chega como `null`), e um `if` para separar presença de ausência.
+- **Asserção solta na lista pega o item errado.** `hasItem(endsWith(": -6"))` pergunta se
+  *alguma* nota termina em -6. Com a penalidade -10 errada de propósito, ficou verde pelas
+  notas de HSTS e CSP. `hasItem(allOf(startsWith("DNS Security"), endsWith(...)))` amarra a
+  nota ao DNS. Para medir: errar de propósito um valor do CSV e ver se alguma linha fica vermelha.
+- **`Actual: null` nas cinco execuções ao mesmo tempo** (`lookFailed` em vez de `lookupFailed`):
+  num teste parametrizado, um erro de caminho derruba todas as linhas.
+- **Verde em 2 s é cache.** Para conferir com scans novos, `docker restart env-backend-1`
+  (as cinco linhas levaram 32 s depois do restart).
 
 **Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
 `playwright/`, e começa pela Etapa P0 (decisões).
@@ -1580,6 +1594,6 @@ curl http://localhost:8099/actuator/health
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-07 (ficha 8): reconfira o
+> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-05 (ficha 9): reconfira o
 > contrato ao vivo e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.
