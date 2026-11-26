@@ -1,6 +1,6 @@
 # HANDOFF — cyberaudit-qa (para colar no próximo chat)
 
-> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-09), como o chat
+> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-07), como o chat
 > trabalha e a primeira mensagem sugerida. As seções 1 a 12 são histórico.
 
 Atualizado em 2026-10-03, porque a janela de contexto do chat anterior encheu.
@@ -1428,7 +1428,8 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
   - O pulado era o SCAN-03. Em 2026-11-25 ele virou três testes, sem `@Disabled`, e a classe
     está verde no 8081. Em 2026-11-26 entraram o AUTH-05 e o AUTH-04 (um teste cada).
   - **Suíte inteira rodada de novo em 2026-11-26, com o AUTH-04: 57 testes, 1 falha (o
-    PLAN-02), 0 pulados**, em 49 s. O backend foi reiniciado depois.
+    PLAN-02), 0 pulados**, em 49 s. O backend foi reiniciado depois. Com o SCAN-09 (um
+    teste, verde sozinho), a conta esperada passa a 58 / 1 / 0.
 
 ### A fila: 33 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
 
@@ -1443,8 +1444,9 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 4 | SCAN-03 | ✅ `ScanAtivoJuiceShopTest`, três testes (2026-11-25). Vermelho visto: XSS apontado para o `eco-escapado-mock` e controle apontado para o `eco-mock` |
 | 5 | AUTH-05 | ✅ `a6c67d0` + `80a0388` (2026-11-26). Vermelho visto no 8099 pelo dono: o controle dá 401 em vez de 200 |
 | 6 | AUTH-04 | ✅ `AuthTotpReplayTest` (2026-11-26), qa-free, lib `dev.samstevens.totp` no pom. Vermelho visto no 8099: o replay do passo 4 dá 200 |
-| **7** | **SCAN-09** | **Próximo.** Ficha 7; reconferir o contrato ao vivo antes de passar |
-| 8 a 22 | SCAN-07, SCAN-05, SCAN-08... | 🔲, na ordem da tabela |
+| 7 | SCAN-09 | ✅ `LaudoStubsTest` (2026-11-26), três rodadas de revisão. Vermelho visto com mapeamento temporário que lista o `XSRF-TOKEN` (tamanho 5; sem a linha do tamanho, a ausência pega) |
+| **8** | **SCAN-07** | **Próximo.** Ficha 8 (`DnsFalsoTest`); reconferir o contrato ao vivo antes de passar |
+| 9 a 22 | SCAN-05, SCAN-08, SCAN-11... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
 | 30 a 33 | PAY-14 (Cypress), UI-01 e UI-02 (Selenium), DOM-02 | 🔲 Começam por decisão do dono (fichas 30 a 33) |
@@ -1493,6 +1495,21 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
   comparação com o segredo.
 - **Teste quebrado antes do passo 3 enche o throttle do 2FA:** 2 falhas por execução, 429 na
   terceira seguida. `docker restart env-backend-1` zera. Entre duas execuções verdes, 30 s.
+
+**O que a revisão do SCAN-09 ensinou (2026-11-26):**
+- **Asserção de ausência com o nome errado é verde para sempre.** `not(hasItem("HSRF-TOKEN"))`
+  passa com qualquer resposta, porque nenhum cookie tem esse nome. O `size() > 0` não salva:
+  o erro está no valor procurado, não no caminho. Medido com o stub `/so-csrf`, que lista o
+  `XSRF-TOKEN`: com H, verde; com X, vermelho.
+- **Corrigir não é apagar.** A linha errada do `XSRF-TOKEN` sumiu na 2ª rodada. A afirmação
+  central do caso tem de estar escrita no teste, mesmo que a contagem a cubra por tabela.
+- **`hasSize` é para lista; `equalTo` é para número.** `"cookieIssues.size()"` já devolve o
+  número, e `hasSize(4)` sobre ele falha com "Expected: a collection with size <4>, Actual: <4>".
+  O certo é `"cookieIssues", hasSize(4)` ou `"cookieIssues.size()", equalTo(4)`.
+- **Comentário e código discordando: um dos dois está errado.** "(RISK HIGH)" no comentário e
+  `equalTo("LOW")` no código, no `connect.sid`.
+- **Mapeamento temporário do WireMock simula a regressão** sem a imagem antiga:
+  `POST /__admin/mappings` num caminho novo do mesmo host, e `POST /__admin/mappings/reset` no fim.
 
 **Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
 `playwright/`, e começa pela Etapa P0 (decisões).
@@ -1563,6 +1580,6 @@ curl http://localhost:8099/actuator/health
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-09 (ficha 7): reconfira o
+> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-07 (ficha 8): reconfira o
 > contrato ao vivo e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.

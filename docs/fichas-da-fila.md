@@ -416,15 +416,33 @@ não era reconhecido como sessão.
 Em `score.issues`, `INSECURE_COOKIES` com `severity` HIGH. Em `score.notes`, a nota de
 cookies termina em `-10` ("Cookies com flags de segurança ausentes: -10").
 
-**Armadilhas.** A ordem da lista segue a dos headers e não é contrato: procure pelo nome. O
-título ("2 cookie(s) com problemas de segurança") depende do idioma; afirme `id` e
-`severity`.
+**O que mais a resposta traz** (desde o BUG-13, conferido em 2026-11-26, se quiser afirmar):
+cada item de `cookieIssues` tem `problems`, a lista de códigos do que falta. `PHPSESSID` →
+`COOKIE_SEM_HTTPONLY` e `COOKIE_SEM_SAMESITE`; `connect.sid` → só `COOKIE_SEM_SECURE`.
+O texto em `issues` (no mesmo item) depende do idioma; os códigos, não.
 
-**Ver o vermelho.** Imagem do commit `2a18641` (o último antes do fix do BUG-12):
-`XSRF-TOKEN` HIGH e `INSECURE_COOKIES` MEDIUM. Sem buildar, inverta uma expectativa uma
-vez para ver a mensagem de falha.
+**Armadilhas.**
+- A ordem da lista segue a dos headers e não é contrato: procure pelo nome, com o `find`
+  da lição do SCAN-03.
+- O ponto em `connect.sid` só atrapalha fora de aspas. Dentro do closure, como texto
+  (`it.name == 'connect.sid'`), é um nome comum. Num caminho solto, o GPath leria
+  `connect` e depois `sid`.
+- A ausência do `XSRF-TOKEN` é asserção de ausência: afirme antes que `cookieIssues` não
+  está vazia. Sem isso, um caminho errado (`null`) deixa o teste verde.
+- O título ("2 cookie(s) com problemas de segurança") depende do idioma: afirme `id` e
+  `severity`.
+- Cache de 2 min por conta e endereço: rodar de novo nesse intervalo devolve o mesmo
+  resultado, mais rápido. Não muda o contrato.
 
-**Conferido em 2026-11-15.** Exatamente o contrato.
+**Ver o vermelho.** O 8099 não serve aqui: ele não tem allowlist e barra o `cookies-mock`.
+O vermelho do bug pede a imagem do commit `2a18641` (o último antes do fix do BUG-12),
+onde sai `XSRF-TOKEN` HIGH e `INSECURE_COOKIES` MEDIUM. Sem buildar, inverta uma
+expectativa uma vez para ver a mensagem de falha.
+
+**Conferido em 2026-11-15. Reconferido ao vivo em 2026-11-26** (Backend `11fd610`, qa-pro,
+pt-BR): exatamente o contrato. `cookieIssues` tem 4 itens (`PHPSESSID` HIGH, `secure_pref`
+LOW com `secure` false, `visitante` LOW, `connect.sid` HIGH), nenhum `XSRF-TOKEN`;
+`INSECURE_COOKIES` HIGH; nota "Cookies com flags de segurança ausentes: -10". Scan em 12 s.
 
 ---
 
