@@ -1411,18 +1411,25 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
 
 ### Estado
 
-- **Bugs:** BUG-01 a BUG-22 corrigidos, cada um com regressão no Backend. Nenhum aberto em
-  `docs/bugs/`.
+- **Bugs:** BUG-01 a BUG-22 corrigidos, cada um com regressão no Backend. **Aberto: BUG-23**
+  (P2, 2026-11-26): `security.txt` e `robots.txt` lentos saem como "não encontrado", com o
+  módulo `OK`. Achado na conferência do SCAN-02; pede decisão do dono sobre quando corrigir.
 - **Repositórios:**
   - Backend `11fd610` (suíte 987, verde);
   - Frontend `a88d471`;
-  - cyberaudit-qa: o commit do SCAN-03 (2026-11-25) vem depois de `616dbd5`.
+  - cyberaudit-qa: SCAN-03 em `3f2e806` + `e290dac`. O bloco 2 (2026-11-26) vem depois.
+- **Ambiente local recriado em 2026-11-26** (`up -d --no-build wiremock backend`, mais
+  `up --no-build seeder`) para os aliases e a conta do bloco 2. O restart zerou cota e
+  rate limit em memória.
 - **Suíte RestAssured do dono (2026-11-24):** 52 testes, 1 falha, 1 pulado.
   - A falha é o PLAN-02, que espera o contrato antigo (ver "Correções pendentes" abaixo).
   - O pulado era o SCAN-03. Em 2026-11-25 ele virou três testes, sem `@Disabled`, e a classe
     está verde no 8081. A suíte inteira não foi rodada de novo: a conta esperada é 54 / 1 / 0.
 
-### A fila: 22 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
+### A fila: 33 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
+
+Os 22 primeiros, mais o bloco 2 (23 a 33), acrescentado em 2026-11-26 por decisão do dono:
+o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwright.
 
 | # | Caso | Estado |
 |---|---|---|
@@ -1432,6 +1439,9 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
 | 4 | SCAN-03 | ✅ `ScanAtivoJuiceShopTest`, três testes (2026-11-25). Vermelho visto: XSS apontado para o `eco-escapado-mock` e controle apontado para o `eco-mock` |
 | **5** | **AUTH-05** | **Próximo.** Ficha 5; reconferir o contrato ao vivo antes de passar. O vermelho é no 8099 |
 | 6 a 22 | AUTH-04, SCAN-09, SCAN-07... | 🔲, na ordem da tabela |
+| 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
+| 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
+| 30 a 33 | PAY-14 (Cypress), UI-01 e UI-02 (Selenium), DOM-02 | 🔲 Começam por decisão do dono (fichas 30 a 33) |
 
 **O que a revisão do SCAN-01 ensinou (vale para os próximos SCAN):**
 - **Mande o esquema da ficha.** Com `https://juice-shop:3000/` o teste ficava verde mesmo assim:

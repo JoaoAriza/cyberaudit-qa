@@ -109,6 +109,25 @@ ele para o `TestConfig`, mas a decisão é sua.
 | 21 | SCAN-15 | P2 | `LaudoStubsTest` | Entrou em 2026-11-23 (BUG-21). Mesmo host do SCAN-09 e do SCAN-14: faça junto. |
 | 22 | SCAN-16 | P2 | `LaudoStubsTest` | Entrou em 2026-11-23 (BUG-22). Mesmo host do SCAN-09, SCAN-14 e SCAN-15: faça junto. |
 
+### Bloco 2: o que a matriz pedia e as fichas não cobriam (2026-11-26)
+
+O dono decidiu pôr no fim da fila, antes do Playwright. São partes de casos em outra
+ferramenta, três casos liberados pelo BUG-03 que nunca ganharam ficha, e o DOM-02.
+
+| # | Caso | Prior. | Ferramenta · classe/arquivo sugerido | Por que nessa posição |
+|---|---|---|---|---|
+| 23 | AUTH-05 | P1 | Postman · `collection.json` | Mesmo contrato do caso 5. Fecha a coluna Postman da matriz. |
+| 24 | PAY-03 | P1 | RestAssured · `PagamentoValidacaoTest` (nova) | 400 curto, sem estado. Postman já tem. |
+| 25 | PAY-05 | P1 | RestAssured · `PagamentoValidacaoTest` | Igual ao 24, no Pix. |
+| 26 | SCAN-04 | P1 | RestAssured · `LaudoStubsTest` | Stub novo `limpo-mock`. É o controle do SCORE-01: faça antes dele. |
+| 27 | SCORE-01 | P0 | RestAssured · `LaudoStubsTest` | Stub novo `critico-mock`, com o `limpo-mock` de controle. |
+| 28 | SCAN-02 | P1 | RestAssured · `LaudoStubsTest` | Stub novo `lento-mock`. Um scan de ~55 s. |
+| 29 | AUTH-04 | P0 | Cypress · `auth-04-replay.cy.js` (nova) | Login real pela tela, conta nova `qa-auth04-ui`. Depois do AUTH-04 da API (caso 6). |
+| 30 | PAY-14 | P1 | Cypress → **decisão** | Bate na mesma parede do PAY-12. Proposta: fechar como coberto por API. |
+| 31 | UI-01 | P1 | Selenium → **começa pela Fase 5** | Selenium nunca foi montado: decisões e scaffold antes do caso. |
+| 32 | UI-02 | P1 | Selenium | Depois do 31 e da correção do UI-02 no Cypress. |
+| 33 | DOM-02 | P1 | **decisão** (manual × automatizado) | Caso novo, pedido em 2026-10-28. O automatizado pede HTTPS confiável no ambiente. |
+
 ---
 
 ### 1. SSRF-03 hex (P0) · `SsrfGuardTest`
@@ -286,6 +305,20 @@ só vale se a **mesma** chave deu 200 antes. Sem esse controle, o teste não dis
 pega o bug.
 
 **Conferido em 2026-11-15.** 201 → 200 → adulterada 401 → 204 → 401 → 409.
+
+**Conferido de novo em 2026-11-25** (Backend `11fd610`). 8081: 201 → 200 (array) →
+adulterada 401 → 204 → 401 → 409 "API key já revogada." → mesmo nome 409. 8099: 201 → **401**
+no passo 2 → 204. Achados da conferência:
+- **O 401 só tem `error`** (`{"error":"Autenticação necessária."}`), sem `message`. Os 409
+  são o contrário: o texto vem em `message`, e o `error` é `"409 CONFLICT"`.
+- Na lista do passo 2, cada item tem o campo `plainKey`, mas `null`. A chave só vem na
+  resposta do passo 1.
+- O `GET /api-keys` com Bearer lista também as revogadas (`active` false). Não conte o total.
+- **O 8081 e o 8099 usam o mesmo Postgres.** A chave criada num aparece no outro, e o limite
+  de 10 ativas é um só.
+- **Teste que falha no meio deixa a chave ativa.** No 8099 o passo 2 falha, e o `DELETE` do
+  passo 3 nunca roda. Cada vermelho deixa uma chave ativa no qa-pro. Uma limpeza que roda
+  mesmo com falha (`@AfterEach`) resolve.
 
 ---
 
@@ -1013,6 +1046,357 @@ fix. Se quiser, eu preparo (é infra). Medido antes do fix: os três HIGH, "3 co
 - `impactIndicators` vazio.
 - O mesmo em `en`.
 - Na tela (qa-pro), o painel não mostra "Cookies de sessão", e os três cards estão LOW.
+
+---
+
+## Bloco 2 (fichas 23 a 33, montadas em 2026-11-26)
+
+**Infra nova, já aplicada no ambiente local em 2026-11-26** (Backend `11fd610`):
+- Aliases do WireMock `limpo-mock`, `critico-mock` e `lento-mock`, na `SSRF_TEST_ALLOWLIST`
+  do `backend` (não na do 8099). Stubs `env/wiremock/mappings/limpo.json` e `lento.json`.
+  Numa máquina nova: `docker compose -f env/docker-compose.test.yml up -d --no-build wiremock backend`.
+- Conta `qa-auth04-ui@cyberaudit.test` no `env/seed.sql` (FREE, mesma senha e TOTP de teste),
+  e a chave `emailAuth04Ui` no `cypress.config.js`. Numa máquina nova: `up --no-build seeder`.
+
+### 23. AUTH-05 (P1) · Postman · `collection.json`
+
+**O que prova e por quê.** O mesmo do caso 5: a chave revogada perde o acesso, e o
+controle é a mesma chave dando 200 antes. Aqui na collection, que o Newman roda na CI. É o
+último caso com Postman pendente na matriz.
+
+**Preparar.** Nada no ambiente. Na collection, quatro requests em sequência, numa pasta
+própria. Conceitos do Postman que entram:
+- **Variável de coleção** leva um valor de um request para o outro: o script de teste do 1º
+  guarda o `id` e a `plainKey` (`pm.collectionVariables.set`), e os seguintes usam
+  `{{nomeDaVariavel}}` na URL e no header.
+- **Variável dinâmica** dá nome único por execução: `{{$timestamp}}` ou `{{$guid}}` no corpo.
+
+**Pedido e afirmar.** Os mesmos cinco passos da ficha 5, com o `{{jwtPro}}` que a collection
+já usa nos PAY:
+1. `POST /api-keys` → 201, `plainKey` começando com `ca_`.
+2. `GET /api-keys` só com `X-Api-Key` → 200.
+3. `DELETE /api-keys/{id}` com Bearer → 204.
+4. O `GET` do passo 2 → 401 e `error` = `Autenticação necessária.`.
+5. Opcional: `DELETE` de novo → 409 e `message` = `API key já revogada.`.
+
+**Armadilhas.**
+- **Os passos 2 e 4 não podem levar o Bearer.** Se o `Authorization` for junto, ele autentica
+  sozinho: o passo 2 dá 200 mesmo com a API key quebrada (verde falso do BUG-01), e o 4 dá
+  200 no lugar do 401. A collection não tem auth na raiz hoje; mantenha o header só nos
+  requests 1, 3 e 5.
+- **O 401 só tem `error`**, sem `message`. Os 409 têm o texto em `message`.
+- **Diferença boa de saber para o JUnit:** no Newman, um `pm.test` que falha não para a
+  execução. O `DELETE` do passo 3 roda mesmo se o passo 2 falhou, então a chave não fica
+  ativa. No RestAssured, o teste para na primeira falha (ficha 5).
+- O qa-pro é o mesmo do RestAssured: o limite de 10 chaves ativas é um só para os dois.
+
+**Ver o vermelho.** Rode a pasta com o `baseUrl` apontando para o 8099
+(`http://localhost:8099`, num environment à parte ou trocando na hora): o passo 2 dá 401.
+
+**Conferido em 2026-11-25** (ficha 5, mesmo contrato, 8081 e 8099).
+
+---
+
+### 24. PAY-03 (P1) · RestAssured · `PagamentoValidacaoTest`
+
+**O que prova e por quê.** Que o checkout de cartão recusa o pedido sem o token do cartão
+antes de falar com o Mercado Pago. O `cardTokenId` é o que o SDK do MP gera no navegador:
+sem ele não há o que cobrar, e o backend não pode seguir.
+
+**Preparar.** Nada. Token do qa-free ou do qa-pro (os dois dão o mesmo 400).
+
+**Pedido.** `POST /billing/checkout/card`, corpo `{"plan":"PRO"}`, Bearer.
+
+**Afirmar.** 400; `error` = `400 BAD_REQUEST`; `message` contém `cardTokenId ausente`.
+
+**Armadilhas.**
+- **Nunca mande `cardTokenId` com a qa-free.** Com um token, o mock do MP aprova e a conta
+  vira PRO, o que quebra os casos que contam com ela FREE. Os casos de upgrade têm conta
+  própria (PAY-01, PAY-06, PAY-14).
+- **Checkout tem rate limit próprio:** 5 por minuto por usuário (PAY-09). Cada 400 conta.
+  O PAY-03 e o PAY-05 juntos fazem 2 ou 3 chamadas; laço não cabe aqui.
+- A `message` sai em português mesmo com `Accept-Language: en`. Afirme o trecho, não o
+  texto inteiro.
+
+**Ver o vermelho.** Inverta uma expectativa uma vez (por exemplo, espere 200). Não há
+imagem antiga com outro comportamento.
+
+**Conferido em 2026-11-26.** qa-pro e qa-free: 400, `400 BAD_REQUEST`, "cardTokenId ausente —
+gere o token no navegador antes de chamar este endpoint.". O mesmo com `en`.
+
+---
+
+### 25. PAY-05 (P1) · RestAssured · `PagamentoValidacaoTest`
+
+**O que prova e por quê.** Que o checkout Pix recusa CPF com quantidade errada de dígitos
+antes de gerar a cobrança. O Pix exige o CPF do pagador.
+
+**Pedido.** `POST /billing/checkout/pix`, corpo `{"plan":"PRO","cpf":"123"}`, Bearer.
+
+**Afirmar.** 400; `error` = `400 BAD_REQUEST`; `message` contém `informe os 11 dígitos`.
+Opcional, como `@ParameterizedTest`: `123` (curto) e `123456789012` (12 dígitos) dão o
+mesmo 400.
+
+**Armadilhas.** As mesmas do PAY-03: rate limit de checkout, `message` em português, e
+nunca um CPF válido com a qa-free (gera Pix de verdade no mock e muda estado).
+
+**Conferido em 2026-11-26.** `123` e `123456789012`: 400, "CPF inválido: informe os 11
+dígitos, com ou sem pontuação.". `plan` aceita `PRO` e `Pro`.
+
+---
+
+### 26. SCAN-04 (P1) · RestAssured · `LaudoStubsTest`
+
+**O que prova e por quê.** Que o scan não inventa achado onde está tudo certo. Os SCAN de
+até aqui provam que cada falha é achada; este prova o outro lado: um alvo com os seis
+headers de segurança certos e `security.txt` sai sem achado nenhum, fora o SSL do ambiente.
+Falso positivo custa a confiança no laudo tanto quanto falso negativo.
+
+**Preparar.** Nada (stub `limpo-mock`, infra do bloco 2).
+
+**Pedido.** `GET /scan?url=http://limpo-mock:8080/&active=false`, qa-pro, pt-BR.
+
+**Afirmar.**
+- `httpStatus` = 200 (controle: o alvo respondeu, ver SCAN-01).
+- Em `headers`, os seis com valor começando por `OK`: `Strict-Transport-Security`,
+  `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`,
+  `Permissions-Policy`.
+- `securityTxtPresent` true.
+- Em `score.issues`, a lista de `id` é exatamente `["SSL_INVALID"]`.
+- `cookieIssues`, `jwtSecurity` e `dangerousHttpMethods` vazios; `serverVersionExposed` false.
+
+**Armadilhas.**
+- **O `SSL_INVALID` (HIGH, -35) é do ambiente, não do alvo.** Nenhum stub tem HTTPS válido.
+  É o único achado esperado.
+- **"Vazio" precisa do controle.** Lista vazia também passa se o campo não existir
+  (`Actual: null`, lição do SCAN-03). O `httpStatus` 200 e os headers `OK` vêm antes e
+  provam que a página foi lida.
+- O `CERT_TRANSPARENCY` pode sair `ERROR` e entrar na nota de resultado parcial (crt.sh no
+  Docker, ver SCAN-01). Não afirme a lista de notas nem a contagem dela.
+- Não afirme `score.score`. Hoje é 65 (100 menos os 35 do SSL), mas o SCORE-01 é quem usa a
+  nota, e com motivo.
+
+**Ver o vermelho.** Troque o alvo uma vez por `http://critico-mock:8080/` (o caso 27): a
+lista de `id` ganha `JWT_CRITICAL`.
+
+**Conferido em 2026-11-26.** 200 em 5 s, `httpStatus` 200, os seis `OK`, `securityTxtPresent`
+true, `score.issues` = só `SSL_INVALID/HIGH`, nota 65 MEDIUM, listas vazias.
+
+---
+
+### 27. SCORE-01 (P0) · RestAssured · `LaudoStubsTest`
+
+**O que prova e por quê.** Que um achado CRITICAL não fica escondido atrás de uma nota boa.
+O `ScoreService` tem um piso de risco (*severity override*): com issue CRITICAL, o
+`riskLevel` não fica abaixo de HIGH, seja qual for a nota. Sem o piso, um site com um
+JWT `alg:none` (qualquer um forja a sessão) e o resto em ordem sairia "risco médio".
+
+**Correção do escopo na matriz:** a matriz dizia "nota não fica alta". O piso mexe no
+`riskLevel`, não na nota: a nota cai só os 15 do achado. O caso afirma o nível.
+
+**Preparar.** Nada (stubs `critico-mock` e `limpo-mock`, infra do bloco 2). O `critico-mock`
+é o `limpo-mock` com um cookie `auth_token` que carrega um JWT `alg:none`. O cookie tem
+Secure, HttpOnly e SameSite, para não dar achado de cookie.
+
+**Pedido.** qa-pro, pt-BR, `active=false`:
+- `GET /scan?url=http://critico-mock:8080/`
+- controle: `GET /scan?url=http://limpo-mock:8080/`
+
+**Afirmar,** nesta ordem:
+1. `critico-mock`: em `score.issues`, um item com `id` = `JWT_CRITICAL` e `severity`
+   CRITICAL. É o que aciona o piso.
+2. `critico-mock`: `score.score` **maior ou igual a 45**. Pela régua, 45 a 69 é MEDIUM. Esta
+   asserção prova que a nota sozinha não daria HIGH.
+3. `critico-mock`: `score.riskLevel` = `HIGH`. Com os passos 1 e 2, só o piso explica.
+4. Controle, `limpo-mock`: `score.riskLevel` = `MEDIUM`. O mesmo alvo sem o CRITICAL não
+   sobe de nível; o HIGH do passo 3 vem do JWT, não do ambiente.
+
+**Armadilhas.**
+- **A ordem importa.** Se o passo 2 falhar um dia (outro desconto novo derrubou a nota
+  abaixo de 45), o HIGH passaria a vir da nota, e o passo 3 ficaria verde sem provar o
+  piso. Com o 2 antes, o teste avisa.
+- **É a exceção da regra "não afirme `score`"** (seção 0). Aqui o stub foi montado para que o
+  único outro desconto seja o SSL do ambiente: 100 − 35 − 15 = 50.
+- O SSL inválido é HIGH e tem o seu próprio piso (HIGH → no mínimo MEDIUM). É por isso que
+  o controle é MEDIUM, e não LOW ou SECURE.
+- Não confunda com o rótulo do achado (BUG-11, `HstsAusenteRotuloTest`): ali o assunto era
+  o HIGH acionando o piso. Aqui é o CRITICAL.
+
+**Ver o vermelho.** Não há imagem sem o piso. Para ver a asserção falhar, espere `MEDIUM`
+no passo 3 uma vez.
+
+**Conferido em 2026-11-26.** `critico-mock`: 50, HIGH, issues `SSL_INVALID/HIGH` e
+`JWT_CRITICAL/CRITICAL`, notas "Certificado SSL inválido/erro: -35" e "JWT inseguro
+detectado: -15", `jwtSecurity` = `auth_token`, `none`, CRITICAL. `limpo-mock`: 65, MEDIUM.
+
+---
+
+### 28. SCAN-02 (P1) · RestAssured · `LaudoStubsTest`
+
+**O que prova e por quê.** Que um alvo que aceita a conexão e demora a responder não ganha
+laudo "limpo". A busca principal do scan desiste em 8 s; sem os headers, o laudo tem de
+dizer que não verificou, e não que está tudo certo. É o lado "lento" do SCAN-13 (que cobre
+"não existe" e "não conecta").
+
+**Preparar.** Nada (stub `lento-mock`: a raiz responde depois de 10 s).
+
+**Pedido.** `GET /scan?url=http://lento-mock:8080/&active=false`, qa-pro, pt-BR. Leva
+**~55 s**: vários módulos batem na raiz e cada um espera o seu timeout.
+
+**Afirmar.**
+- 200. Não é o 422 do SCAN-13: a conexão abriu.
+- `httpStatus` = 0 (nenhuma resposta lida).
+- `moduleStatus.HTTP_FETCH` = `ERROR`.
+- `headers.error` contém `não respondeu a tempo`.
+- Em `score.issues`, `HEADERS_UNVERIFIED` com `severity` MEDIUM.
+- Em `score.notes`, uma nota começando com `⚠ Resultado parcial` e contendo
+  `Busca da página / headers`.
+
+**Armadilhas.**
+- **Correção do escopo na matriz:** ela dizia "módulo marcado como timeout". O contrato é
+  `ERROR`. O `TIMEOUT` só aparece quando um módulo não termina nos 120 s da fase inteira, e
+  nenhuma sonda isolada chega perto disso.
+- **O nome na nota depende do idioma** ("Busca da página / headers" em pt-BR). Mande
+  `Accept-Language: pt-BR`. O `HTTP_FETCH` do `moduleStatus` é código e não muda.
+- **Timeout do RestAssured:** se tiver configurado algum abaixo de 60 s, o teste cai por ele.
+- **Cache:** o resultado fica guardado 2 min. Repetir logo em seguida devolve o mesmo, em
+  menos de 1 s.
+- **Fora do caso, por enquanto: BUG-23.** Atraso no `security.txt` ou no `robots.txt` (e
+  não na raiz) hoje sai como "arquivo ausente", com o módulo `OK`. Achado lateral desta
+  conferência, aberto. Depois do fix, vira parte deste caso.
+
+**Ver o vermelho.** Troque o alvo uma vez por `http://limpo-mock:8080/`: o `HTTP_FETCH` sai
+`OK` e o passo do `ERROR` falha.
+
+**Conferido em 2026-11-26.** 200 em 53 s, `httpStatus` 0, `HTTP_FETCH` `ERROR`, `headers` =
+`{"error":"Erro ao conectar: o servidor aceitou a conexão, mas não respondeu a tempo"}`,
+`HEADERS_UNVERIFIED/MEDIUM`, "⚠ Resultado parcial — não concluíram: Busca da página /
+headers, Certificate Transparency.".
+
+---
+
+### 29. AUTH-04 (P0) · Cypress · `auth-04-replay.cy.js`
+
+**O que prova e por quê.** O mesmo do caso 6, pela tela: quem digita um código TOTP que já
+foi usado fica na tela do 2FA, com o aviso, e não entra. O caso 6 prova a regra na API; este
+prova que a tela mostra a recusa em vez de travar ou entrar.
+
+**Preparar.**
+- Conta `qa-auth04-ui@cyberaudit.test` (infra do bloco 2), no `Cypress.env('emailAuth04Ui')`.
+  Senha e segredo TOTP são os de teste que o UI-01 já usa (`password`, `cy.task('totp')`).
+- **Login real, não token forjado.** O caso é o login.
+
+**Passos e afirmar.**
+1. Abrir o login, e-mail e senha → tela do 2FA.
+2. Gerar o código com `cy.task('totp')` e **guardar** (alias ou variável). Digitar e
+   confirmar → dashboard. É o controle positivo: o código vale na primeira vez.
+3. Sair (ou limpar o token do `localStorage`) e fazer o login de novo → tela do 2FA.
+4. Digitar o **mesmo** código guardado → a caixa de erro mostra
+   `Código TOTP já utilizado`, e a tela do 2FA continua (o dashboard não aparece).
+
+**Armadilhas.**
+- **Não chame o `cy.task('totp')` de novo no passo 4.** Se a janela virou, ele devolve outro
+  código, que vale. O teste entra no dashboard, e o replay não foi testado.
+- **A janela pode virar entre o passo 2 e o 4.** Não muda nada: o código guardado continua
+  usado. Mas gere o do passo 2 com folga: se faltar menos de ~5 s para virar, espere.
+- Rodar duas vezes em menos de 30 s quebra o passo 2 da segunda execução (código já usado).
+  Não é bug.
+- A mensagem vem do backend; o `support/e2e.js` fixa pt-BR. Afirme o começo do texto.
+- Throttle do 2FA: 5 falhas → 429 por 15 min. Cada execução tem um sucesso antes da falha,
+  e o sucesso zera a contagem. O login só conta falhas de senha.
+
+**Ver o vermelho.** O 8099 não tem tela própria. Para ver a asserção falhar, troque o
+passo 4 uma vez para esperar o dashboard.
+
+**Conferido em 2026-11-26** (API, conta nova): login → `requires2fa` true, métodos
+`["TOTP"]`; código N → 200 com token; login de novo, o mesmo N → 422, `message` "Código TOTP
+já utilizado. Aguarde o próximo código no aplicativo.". **Tela conferida no código**
+(`App.tsx`, `handle2faSubmit` mostra a `message` do backend na caixa de erro e não sai da
+tela do 2FA). Confiro na tela no dia em que passar o caso.
+
+---
+
+### 30. PAY-14 (P1) · Cypress → decisão do dono
+
+**O que a matriz pede.** O checkout de cartão sem CPF pela tela (cliente estrangeiro). O
+RestAssured já cobre a API (✅, conta `qa-pay-nocpf`).
+
+**Por que não dá como os outros.** É a mesma parede do PAY-12 (decisão de 2026-10-26). O
+número e o CVV ficam nos Secure Fields do Mercado Pago, num iframe de outro domínio, e o
+token sai do SDK do MP de verdade, com a chave pública do build. Sem token, o formulário
+nunca chega ao `POST /billing/checkout/card`.
+
+**O que a tela faz com o CPF** (lido no `App.tsx`, `CardCheckoutPanel`): vazio passa; com
+dígitos, só aceita 11. Esse pedaço daria para testar sem o MP: CPF `123` mostra
+`checkout.cpfInvalido` antes de tokenizar. Mas é a validação de formulário, não o "sem CPF
+paga".
+
+**Proposta:** fechar o PAY-14 na tela como "coberto por API + manual", igual ao PAY-12, com
+o motivo na matriz. Alternativa: um teste só da validação de CPF parcial (curto, sem MP).
+A decisão é do dono.
+
+---
+
+### 31. UI-01 (P1) · Selenium → começa pela Fase 5
+
+**O que a matriz pede.** O login completo com 2FA chegando ao dashboard, em Selenium. O
+Cypress já cobre (✅).
+
+**Estado.** O Selenium nunca foi montado no repo: não há pasta, pom nem driver. A Fase 5
+foi marcada como "opcional conforme vagas-alvo" (HANDOFF §8).
+
+**Antes do caso, decisões do dono:**
+1. **Fazer ou não.** O Playwright (Fase 7) também porta o UI-01 e o UI-02. Três ferramentas
+   de tela nos mesmos casos é muito para manter. Vale se as vagas-alvo pedem Selenium.
+2. **Linguagem:** Java (mesmo Maven do RestAssured, recomendado) ou outra.
+3. **Driver:** o Selenium 4 baixa o ChromeDriver sozinho (Selenium Manager). Na CI isso é
+   download na hora; a alternativa é fixar a versão.
+4. **Page Object:** é do dono (Regra 3). Eu faço o scaffold (módulo, pom, config, conta de
+   teste, CI).
+
+**Conta.** Precisa de uma conta própria, pelo mesmo motivo do caso 29 (replay de TOTP entre
+suítes na CI). Eu crio no scaffold.
+
+---
+
+### 32. UI-02 (P1) · Selenium
+
+**O que prova.** O scan iniciado pela tela aparece com nota e no histórico, **com o host
+digitado**. Vem depois do 31 (mesmo scaffold) e da correção do UI-02 no Cypress (fim do
+documento), para não portar o verde falso.
+
+**Armadilha já conhecida:** o campo abre com "github.com". O `sendKeys` do Selenium também
+acrescenta no fim; precisa do `clear()` antes, como no Cypress.
+
+---
+
+### 33. DOM-02 (P1) · caso novo → decisão do dono
+
+**O que prova.** O fluxo feliz da posse de domínio: cadastrar o domínio, publicar o token em
+`/.well-known/cyberaudit.txt`, verificar e ver o scan ativo liberado nele. Hoje só existe o
+negativo (DOM-01). O dono pediu em 2026-10-28 (HANDOFF §9).
+
+**Contrato lido no código** (`DomainController`, `DomainService`, `DomainProtectionService`):
+- `POST /domains` `{"host": "..."}` → 201 com o token (PRO ou mais).
+- `POST /domains/{id}/verify` → 200 se `https://<host>/.well-known/cyberaudit.txt` tiver
+  exatamente o token; senão 417 "Verificação falhou…".
+- O token é um HMAC do host: o mesmo host dá sempre o mesmo token.
+
+**Por que não dá hoje no ambiente local.** A verificação busca o arquivo **só por HTTPS**,
+na porta 443, com a validação normal de certificado. Nenhum stub tem HTTPS confiável. O
+automatizado pede infra nova:
+- uma CA de teste;
+- o WireMock servindo HTTPS na 443, com certificado dessa CA;
+- o `backend` confiando nela.
+
+Isso muda o resultado de SSL dos stubs que passarem a ter HTTPS, então é uma etapa própria,
+com conferência dos SCAN já escritos.
+
+**Opções:**
+1. **Manual primeiro** (o que o §9 sugeria): na conta PRO real do dono, no domínio dele.
+   Registro do passo a passo como caso manual na matriz.
+2. **Automatizado depois**, com a infra de HTTPS acima. Fica como a última etapa do bloco,
+   ou depois do Playwright.
 
 ---
 
