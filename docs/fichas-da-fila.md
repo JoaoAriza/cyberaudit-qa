@@ -667,8 +667,36 @@ X-Frame-Options ausente (MEDIUM).
 **Armadilhas.** "Sem WAF" (-1) não aparece: a detecção de WAF não roda no passivo. Fica
 coberto no Backend. As notas não têm `id`, e o texto muda com o idioma: sem o
 `Accept-Language` fixo, o teste quebra.
+- **Começo e fim amarrados** (lições do SCAN-07 e do SCAN-08): `: -1` termina três notas e
+  `: -2` termina duas. Só o final não diz de qual nota é.
+- A nota da versão é mais longa que o começo da tabela: "Versão de software exposta
+  (Server/X-Powered-By): -2". Por isso, começo + fim, não a frase inteira.
+- **Cinco linhas pedem `@CsvSource`** (começo, final, id da issue). Cada linha refaz o mesmo
+  scan: a primeira leva uns 22 s, as outras voltam do cache em menos de 1 s (mesma conta,
+  endereço, modo e idioma).
+- **Id da linha dentro do closure:** o RestAssured tem `withArgs` (`io.restassured.RestAssured`).
+  Você escreve `%s` no caminho, `"score.issues.find { it.id == '%s' }.severity"`, e passa
+  `withArgs(id)` antes do matcher. Conferido em 2026-11-27; com um id que não existe, a falha
+  mostra o caminho já preenchido e `Actual: null`. A outra saída é montar o caminho somando
+  strings, cuidando das aspas simples em volta do id.
+- O acento em "Versão" e "sensíveis" funciona: o pom já declara o código-fonte em UTF-8.
+- O `pesos-mock` também é o alvo do BUG-23 (aberto): um `robots.txt` lento some com o
+  `SENSITIVE_ROBOTS_PATHS`. O stub não é lento; se essa linha falhar de vez em quando num
+  ambiente lento, é o BUG-23, não o teste.
+- Neste ambiente sai também a nota "⚠ Resultado parcial — não concluíram: Certificate
+  Transparency" (o crt.sh não responde no Docker). Não é do caso.
 
-**Conferido em 2026-11-15.** As cinco notas e as cinco issues.
+**Por que LOW custa no máximo 2.** Antes do fix, versão exposta, robots.txt e Referrer-Policy
+ausente custavam 5 cada, o mesmo que um X-Frame-Options ausente (MEDIUM). Higiene pesava
+como falha média.
+
+**Ver o vermelho.** Imagem do commit `6a78573` (o último antes do fix do BUG-14, `4555c80`):
+versão, robots.txt e Referrer-Policy com `-5`. Sem buildar, troque o final de uma linha
+(por exemplo `-2` → `-5`). O 8099 não serve: ele barra o stub.
+
+**Conferido em 2026-11-15.** As cinco notas e as cinco issues. **Reconferido ao vivo em
+2026-11-27** (Backend `11fd610`, qa-pro, pt-BR, scan em 22 s): as cinco notas com os finais da
+tabela e as cinco issues LOW. Score 48, MEDIUM (pelo SSL e pelo HSTS, fora do caso).
 
 ---
 

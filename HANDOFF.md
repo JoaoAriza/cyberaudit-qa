@@ -1,6 +1,6 @@
 # HANDOFF — cyberaudit-qa (para colar no próximo chat)
 
-> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-10), como o chat
+> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-06), como o chat
 > trabalha e a primeira mensagem sugerida. As seções 1 a 12 são histórico.
 
 Atualizado em 2026-10-03, porque a janela de contexto do chat anterior encheu.
@@ -1432,6 +1432,8 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
     teste, verde sozinho), a conta esperada passa a 58 / 1 / 0. Com o SCAN-07 (cinco
     execuções do `@CsvSource`), 63 / 1 / 0. Com o SCAN-05 (2026-11-27), 64 / 1 / 0, ou 63 / 1 / 1
     se o NVD não responder (o SCAN-05 sai pulado). Com o SCAN-08, 65 / 1 / 0 (ou 64 / 1 / 1). Com o SCAN-11 (duas execuções), 67 / 1 / 0 (ou 66 / 1 / 1).
+    Com o SCAN-10 (cinco execuções), 72 / 1 / 0 (ou 71 / 1 / 1). O `LaudoStubsTest` sozinho: 10
+    testes, verde em 40 s com scans novos (2026-11-27).
 
 ### A fila: 33 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
 
@@ -1451,8 +1453,9 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 9 | SCAN-05 | ✅ `LaudoStubsTest` (2026-11-27), duas rodadas de revisão. Vermelho visto esperando o `CVE-2013-2220`; pulado visto com id que não vem; detector de versão quebrado dá vermelho, não pulado |
 | 10 | SCAN-08 | ✅ `LaudoStubsTest` (2026-11-27), aprovado na 1ª rodada. Vermelho visto invertendo: severidade HIGH, nota terminando em `-5`, header `OK` |
 | 11 | SCAN-11 | ✅ `LaudoStubsTest` (2026-11-27), aprovado na 1ª rodada. Vermelho visto: textos trocados entre as linhas e `Accept-Language` fixo em pt-BR |
-| **12** | **SCAN-10** | **Próximo.** Ficha 12 (`LaudoStubsTest`, cinco notas pelo começo do texto); reconferir o contrato ao vivo antes de passar |
-| 13 a 22 | SCAN-06, UI-04, PLAN-03... | 🔲, na ordem da tabela |
+| 12 | SCAN-10 | ✅ `LaudoStubsTest` (2026-11-27), três rodadas de revisão. Vermelho visto: robots.txt e Referrer-Policy com `-5`, id com erro de digitação |
+| **13** | **SCAN-06** | **Próximo.** Ficha 13 (`DnsFalsoTest`, igual ao SCAN-07 com outro campo); reconferir o contrato ao vivo antes de passar |
+| 14 a 22 | UI-04, PLAN-03, PLAN-04... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
 | 30 a 33 | PAY-14 (Cypress), UI-01 e UI-02 (Selenium), DOM-02 | 🔲 Começam por decisão do dono (fichas 30 a 33) |
@@ -1541,6 +1544,18 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
   e pulado (pré-condição com um dado que não vem). Mais a quarta: defeito nosso antes da
   pré-condição tem de dar vermelho.
 
+**O que a revisão do SCAN-10 ensinou (2026-11-27):**
+- **Num teste parametrizado, o erro pode estar nos dados.** O código estava certo, mas a linha
+  do Referrer-Policy apontava o id do Permissions-Policy, e faltava a linha do Permissions.
+  Como os dois achados são LOW, a linha passava com a issue de qualquer achado LOW: nunca
+  olhou a do Referrer. Conferir o CSV contra a tabela da ficha, linha por linha.
+- **Id repetido em duas linhas do CSV é sinal de linha errada.** Na 2ª rodada, a linha do
+  Permissions entrou, mas o id do Referrer continuou trocado: o mesmo id em duas linhas.
+- **Para medir se uma linha confere o que diz:** troque o dado dela por outro valor plausível
+  (aqui, outro id LOW). Se continuar verde, ela não está conferindo aquele item.
+- **`withArgs`** põe o valor da linha dentro do closure (`'%s'`); a falha mostra o caminho já
+  preenchido.
+
 **Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
 `playwright/`, e começa pela Etapa P0 (decisões).
 
@@ -1610,6 +1625,6 @@ curl http://localhost:8099/actuator/health
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-10 (ficha 12): reconfira o
+> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-06 (ficha 13): reconfira o
 > contrato ao vivo e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.
