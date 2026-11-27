@@ -1450,7 +1450,7 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 8 | SCAN-07 | ✅ `DnsFalsoTest` (2026-11-26), duas rodadas de revisão. Vermelho visto invertendo linhas do CSV (`quarantine` MEDIUM, `dmarc-none` sem issue, penalidade -10) |
 | 9 | SCAN-05 | ✅ `LaudoStubsTest` (2026-11-27), duas rodadas de revisão. Vermelho visto esperando o `CVE-2013-2220`; pulado visto com id que não vem; detector de versão quebrado dá vermelho, não pulado |
 | 10 | SCAN-08 | ✅ `LaudoStubsTest` (2026-11-27), aprovado na 1ª rodada. Vermelho visto invertendo: severidade HIGH, nota terminando em `-5`, header `OK` |
-| **11** | **SCAN-11** | **Próximo.** Ficha 11 (`LaudoStubsTest`, o mesmo alvo em dois idiomas); reconferir o contrato ao vivo antes de passar |
+| **11** | **SCAN-11** | **Passado ao dono em 2026-11-27**, com o contrato reconferido ao vivo (ficha 11). Método novo no `LaudoStubsTest`, o mesmo alvo em pt-BR e en (`@CsvSource` cabe) |
 | 12 a 22 | SCAN-10, SCAN-06, UI-04... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |

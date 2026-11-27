@@ -621,8 +621,28 @@ pt-BR e `WEAK (max-age=0 deletes HSTS)` em en.
 **Armadilhas.** **Correção do HANDOFF:** não precisa reiniciar o backend entre os dois
 idiomas. O idioma faz parte da chave do cache (conferido hoje: en → pt-BR → en, sem
 restart, cada um no seu idioma). Afirme só o valor do header.
+- **Formato natural:** `@CsvSource` com duas colunas (idioma, texto esperado), como no
+  SCAN-07. Os parênteses e os espaços do meio não atrapalham o CSV; só uma vírgula dentro do
+  texto pediria aspas simples em volta do valor.
+- **O idioma tem de vir do parâmetro.** Os outros métodos da classe mandam
+  `Accept-Language` fixo em pt-BR. Copiado sem trocar pelo parâmetro, a linha `en` falha
+  (pelo menos fica vermelha, e não verde falso).
+- `equalTo` compara a frase inteira, com os parênteses: copie da resposta.
+- O título da issue e a nota também mudam com o idioma (`HSTS_WEAK` "Strict-Transport-Security
+  fraco" / "Weak Strict-Transport-Security"; "HSTS fraco: -5" / "Weak HSTS: -5"). O caso é só o
+  texto do header.
 
-**Conferido em 2026-11-15.** Os dois valores.
+**Por que cada linha pega o bug.** Antes do fix o texto estava escrito no código, em inglês: a
+linha pt-BR fica vermelha. Se o idioma saísse da chave do cache, a segunda linha receberia o
+texto da primeira e ficaria vermelha também.
+
+**Ver o vermelho.** Imagem do commit `4555c80` (o último antes do fix do BUG-15, `d0f9594`):
+"WEAK (max-age=0 deletes HSTS)" nos dois idiomas. Sem buildar, troque o texto esperado de uma
+linha. O 8099 não serve: ele barra o stub.
+
+**Conferido em 2026-11-15.** Os dois valores. **Reconferido ao vivo em 2026-11-27** (Backend
+`11fd610`, qa-pro, pt-BR → en → pt-BR sem restart): "WEAK (max-age=0 apaga o HSTS)" e
+"WEAK (max-age=0 deletes HSTS)"; a terceira chamada voltou do cache em 60 ms, ainda em pt-BR.
 
 ---
 
