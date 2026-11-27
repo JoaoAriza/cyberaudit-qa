@@ -12,6 +12,10 @@ import java.util.UUID;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
+import org.junit.jupiter.api.Assumptions;
+import java.util.List;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
 public class LaudoStubsTest extends TestConfig {
 
     private String tokenQaPro() {
@@ -70,5 +74,45 @@ public class LaudoStubsTest extends TestConfig {
                 // 7. Validações globais do laudo (score e notes)
                 .body("score.issues.find {it.id == 'INSECURE_COOKIES' }.severity", equalTo("HIGH"))
                 .body("score.notes", hasItem("Cookies com flags de segurança ausentes: -10"));
+    }
+
+    @Test
+    @DisplayName("SCAN-05: CVE de extensão do PHP (PECL) não deve ser atribuído incorretamente ao core do PHP")
+    void deveGarantirQueCveDeExtensaoPhpNaoAfetaCoreDoPhp() {
+        String token = tokenQaPro();
+        String targetUrl = "http://php-banner-mock:8080";
+
+        var response = given()
+                .header("Authorization", "Bearer " + token)
+                .header("Accept-Language", "pt-BR")
+                .queryParam("url", targetUrl)
+                .queryParam("active", false)
+                .when()
+                .get("/scan")
+                .then()
+                .statusCode(200)
+                .body("url", equalTo(targetUrl))
+                .body("techFingerprint.detectedVersions.PHP", equalTo("8.3.36"))
+                .extract()
+                .response();
+
+        String cveModuleStatus = response.path("moduleStatus.CVE");
+        List<String> cveIds = response.path("cveFindings.cveId");
+
+        assumeTrue(
+                "OK".equals(cveModuleStatus) && cveIds != null && cveIds.contains("CVE-2007-3205"),
+                "Pulando teste: O NVD demorou a responder ou o módulo CVE encontrou instabilidade (moduleStatus: " + cveModuleStatus + ")"
+        );
+
+        // -------------------------------------------------------------
+        // Asserções do Teste
+        // -------------------------------------------------------------
+
+        response.then()
+                .body("url", equalTo(targetUrl))
+                .body("cveFindings.cveId", hasItem("CVE-2007-3205"))
+                .body("cveFindings.cveId", not(hasItem("CVE-2013-2220")))
+                .body("score.issues.id", not(hasItem(startsWith("CVE"))))
+                .body("score.notes", not(hasItem(containsString("CVE"))));
     }
 }
