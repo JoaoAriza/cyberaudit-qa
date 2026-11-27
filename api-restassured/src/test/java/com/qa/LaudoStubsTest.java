@@ -13,6 +13,9 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
 import java.util.List;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -136,5 +139,29 @@ public class LaudoStubsTest extends TestConfig {
                 .body("headers.'Strict-Transport-Security'", equalTo("MISSING"))
                 .body("score.issues.find { it.id == 'HSTS_MISSING' }.severity", equalTo("MEDIUM"))
                 .body("score.notes", hasItem(allOf(startsWith("HSTS ausente"), endsWith("-10"))));
+    }
+
+    @ParameterizedTest(name = "SCAN-11: O texto do header para idioma [{0}] deve ser [{1}]")
+    @CsvSource({
+            "pt-BR, WEAK (max-age=0 apaga o HSTS)",
+            "en, WEAK (max-age=0 deletes HSTS)"
+    })
+    @DisplayName("SCAN-11: O texto explicativo do header de segurança deve sair no idioma solicitado no Accept-Language")
+    void deveTraduzirTextoDoHeaderConformeIdioma(String language, String expectedHeaderValue) {
+        String token = tokenQaPro();
+        String targetUrl = "http://textos-mock:8080";
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .header("Accept-Language", language)
+                .queryParam("url", targetUrl)
+                .queryParam("active", false)
+                .when()
+                .get("/scan")
+                .then()
+                .statusCode(200)
+                .body("url", equalTo(targetUrl))
+
+                .body("headers.'Strict-Transport-Security'", equalTo(expectedHeaderValue));
     }
 }
