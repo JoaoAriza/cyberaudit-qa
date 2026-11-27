@@ -1449,7 +1449,7 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 7 | SCAN-09 | ✅ `LaudoStubsTest` (2026-11-26), três rodadas de revisão. Vermelho visto com mapeamento temporário que lista o `XSRF-TOKEN` (tamanho 5; sem a linha do tamanho, a ausência pega) |
 | 8 | SCAN-07 | ✅ `DnsFalsoTest` (2026-11-26), duas rodadas de revisão. Vermelho visto invertendo linhas do CSV (`quarantine` MEDIUM, `dmarc-none` sem issue, penalidade -10) |
 | 9 | SCAN-05 | ✅ `LaudoStubsTest` (2026-11-27), duas rodadas de revisão. Vermelho visto esperando o `CVE-2013-2220`; pulado visto com id que não vem; detector de versão quebrado dá vermelho, não pulado |
-| **10** | **SCAN-08** | **Próximo.** Ficha 10 (`LaudoStubsTest`, uma issue e uma nota); reconferir o contrato ao vivo antes de passar |
+| **10** | **SCAN-08** | **Passado ao dono em 2026-11-27**, com o contrato reconferido ao vivo (ficha 10). Método novo no `LaudoStubsTest`. Chave com hífen funciona com ou sem aspas (conferido) |
 | 11 a 22 | SCAN-11, SCAN-10, SCAN-06... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |

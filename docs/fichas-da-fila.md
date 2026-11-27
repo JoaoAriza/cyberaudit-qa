@@ -579,11 +579,30 @@ acionava o piso de risco, e um site nota 90 sem outro achado saía "risco médio
 **Afirmar.** `headers["Strict-Transport-Security"]` = `MISSING`; issue `HSTS_MISSING` com
 `severity` MEDIUM; nota de HSTS terminando em `-10` ("HSTS ausente: -10").
 
-**Armadilhas.** O piso de risco em si não dá para testar aqui: o alvo sem HTTPS já leva o
-risco a HIGH. Ele está coberto no Backend (`HstsAusenteRotuloTest`). No GPath do
-RestAssured, a chave com hífen vai entre aspas: `headers.'Strict-Transport-Security'`.
+**Armadilhas.**
+- O piso de risco em si não dá para testar aqui: o alvo sem HTTPS já leva o risco a HIGH
+  (SSL inválido -35 e CSP ausente HIGH). Ele está coberto no Backend
+  (`HstsAusenteRotuloTest`). Não afirme `score.score` nem `riskLevel`.
+- **Chave com hífen no GPath** (corrige o que esta ficha dizia em 2026-11-15): no RestAssured
+  5.5 deste projeto, `headers.'Strict-Transport-Security'` e `headers.Strict-Transport-Security`
+  funcionam os dois, no `JsonPath` e no `.body()` (conferido em 2026-11-27 contra o 8081). As
+  aspas são opcionais; elas deixam explícito que o hífen faz parte do nome.
+- **"Termina em -10" não basta** (lição do SCAN-07): "CSP ausente: -10" também termina em
+  `-10`. Afirme a nota inteira ("HSTS ausente: -10", em pt-BR) ou amarre o começo e o fim.
+- Os seis headers de segurança saem `MISSING` neste stub. A afirmação do caso é só a do HSTS.
 
-**Conferido em 2026-11-15.** `MISSING`, MEDIUM, "HSTS ausente: -10".
+**Por que MEDIUM e não HIGH.** Um achado HIGH aciona o piso de risco: a nota pode ser 90,
+mas o risco não fica abaixo de MEDIUM. Rotular o HSTS ausente como HIGH (BUG-11) deixava
+"risco médio" um site bom que só esquecera o HSTS. O desconto de -10 continua.
+
+**Ver o vermelho.** Imagem do commit `dc1c999` (o último antes do fix do BUG-11, `2a18641`):
+`HSTS_MISSING` HIGH. Sem buildar, inverta uma expectativa uma vez. O 8099 não serve: ele
+barra o stub.
+
+**Conferido em 2026-11-15.** `MISSING`, MEDIUM, "HSTS ausente: -10". **Reconferido ao vivo
+em 2026-11-27** (Backend `11fd610`, qa-pro, pt-BR, scan em 13 s): `headers` com
+`Strict-Transport-Security` = `MISSING`, `HSTS_MISSING` MEDIUM, nota "HSTS ausente: -10".
+Score 32, `riskLevel` HIGH (pelos outros achados).
 
 ---
 
