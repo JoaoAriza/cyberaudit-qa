@@ -1,6 +1,6 @@
 # HANDOFF — cyberaudit-qa (para colar no próximo chat)
 
-> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-05), como o chat
+> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-08), como o chat
 > trabalha e a primeira mensagem sugerida. As seções 1 a 12 são histórico.
 
 Atualizado em 2026-10-03, porque a janela de contexto do chat anterior encheu.
@@ -1430,7 +1430,8 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
   - **Suíte inteira rodada de novo em 2026-11-26, com o AUTH-04: 57 testes, 1 falha (o
     PLAN-02), 0 pulados**, em 49 s. O backend foi reiniciado depois. Com o SCAN-09 (um
     teste, verde sozinho), a conta esperada passa a 58 / 1 / 0. Com o SCAN-07 (cinco
-    execuções do `@CsvSource`), 63 / 1 / 0.
+    execuções do `@CsvSource`), 63 / 1 / 0. Com o SCAN-05 (2026-11-27), 64 / 1 / 0, ou 63 / 1 / 1
+    se o NVD não responder (o SCAN-05 sai pulado).
 
 ### A fila: 33 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
 
@@ -1447,8 +1448,9 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 6 | AUTH-04 | ✅ `AuthTotpReplayTest` (2026-11-26), qa-free, lib `dev.samstevens.totp` no pom. Vermelho visto no 8099: o replay do passo 4 dá 200 |
 | 7 | SCAN-09 | ✅ `LaudoStubsTest` (2026-11-26), três rodadas de revisão. Vermelho visto com mapeamento temporário que lista o `XSRF-TOKEN` (tamanho 5; sem a linha do tamanho, a ausência pega) |
 | 8 | SCAN-07 | ✅ `DnsFalsoTest` (2026-11-26), duas rodadas de revisão. Vermelho visto invertendo linhas do CSV (`quarantine` MEDIUM, `dmarc-none` sem issue, penalidade -10) |
-| **9** | **SCAN-05** | **Passado ao dono em 2026-11-26**, com o contrato reconferido ao vivo (ficha 9). Método novo no `LaudoStubsTest`; depende do NVD de verdade, primeiro `Assumptions`. `cveFindings` é lista de objetos (`cveFindings.cveId`) |
-| 10 a 22 | SCAN-08, SCAN-11, SCAN-10... | 🔲, na ordem da tabela |
+| 9 | SCAN-05 | ✅ `LaudoStubsTest` (2026-11-27), duas rodadas de revisão. Vermelho visto esperando o `CVE-2013-2220`; pulado visto com id que não vem; detector de versão quebrado dá vermelho, não pulado |
+| **10** | **SCAN-08** | **Próximo.** Ficha 10 (`LaudoStubsTest`, uma issue e uma nota); reconferir o contrato ao vivo antes de passar |
+| 11 a 22 | SCAN-11, SCAN-10, SCAN-06... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
 | 30 a 33 | PAY-14 (Cypress), UI-01 e UI-02 (Selenium), DOM-02 | 🔲 Começam por decisão do dono (fichas 30 a 33) |
@@ -1525,6 +1527,18 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 - **Verde em 2 s é cache.** Para conferir com scans novos, `docker restart env-backend-1`
   (as cinco linhas levaram 32 s depois do restart).
 
+**O que a revisão do SCAN-05 ensinou (2026-11-27):**
+- **Pré-condição só para o que está fora do sistema.** O que depende do CyberAudit (status,
+  `url`, versão do PHP) é asserção comum, **antes** do `assumeTrue`. Na 1ª versão o controle do
+  PHP vinha depois: com o detector de versão quebrado (mapeamento temporário sem
+  `X-Powered-By`), o scan nem consulta o NVD, a lista vem vazia e o teste saía **pulado**, não
+  vermelho. Um defeito nosso virava "o NVD não respondeu".
+- **`assumeTrue` pede `boolean`:** `.extract().response()`, `path(...)` para ler (lista do JSON
+  chega como `List`), e as asserções depois em `resposta.then()`.
+- **Três saídas para conferir num teste com pré-condição:** verde, vermelho (asserção invertida)
+  e pulado (pré-condição com um dado que não vem). Mais a quarta: defeito nosso antes da
+  pré-condição tem de dar vermelho.
+
 **Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
 `playwright/`, e começa pela Etapa P0 (decisões).
 
@@ -1594,6 +1608,6 @@ curl http://localhost:8099/actuator/health
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-05 (ficha 9): reconfira o
+> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-08 (ficha 10): reconfira o
 > contrato ao vivo e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.
