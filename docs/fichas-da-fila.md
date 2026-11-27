@@ -522,6 +522,17 @@ container, sem API key).
 - `cveFindings` não contém `CVE-2013-2220`; nenhuma issue com `id` começando em `CVE_`;
   nenhuma nota com "CVE".
 
+**`cveFindings` é uma lista de objetos** (corrige o que esta ficha deixava entender em
+2026-11-15). Cada item tem `cveId`, `severity`, `cvssScore`, `description`,
+`affectedSoftware`, `publishedDate` e `referenceUrl`. O id está em `cveId`: o caminho é
+`cveFindings.cveId`. Um `hasItem("CVE-2007-3205")` direto em `cveFindings` compara o texto
+com um objeto inteiro e nunca bate (e a negativa do `CVE-2013-2220` passaria sempre).
+
+**Por que o `CVE-2007-3205` não vira issue nem nota:** o score só desconta CVE com CVSS
+≥ 7.0 (HIGH/CRITICAL). Esse tem CVSS 5.0. O `CVE-2013-2220` do bug tinha a issue
+`CVE_CVE_2013_2220`. Por isso a ausência de issue `CVE_*` e de nota "CVE" vem junto com a
+ausência na lista, não no lugar dela.
+
 **Armadilhas.**
 - **O NVD oscila.** Numa rodada de 2026-11-15 veio `cveFindings: []`: o NVD levou 12 s, e o
   timeout do backend é 12 s. Com `[]`, as três negativas passam sem testar nada. Desde o fix
@@ -533,6 +544,15 @@ container, sem API key).
   Sem elas, o teste sai **pulado** ("não deu para testar"), em vez de verde falso ou
   vermelho de rede. A alternativa é afirmar as duas como asserção comum e aceitar um
   vermelho de vez em quando por causa do NVD.
+- **O `assumeTrue` pede um `boolean` do Java, não um matcher do RestAssured.** O
+  `.body(...)` só afirma; ele não devolve o valor. Para a pré-condição, guarde a resposta
+  (`.extract().response()`) e leia os campos com `path(...)`. Uma lista do JSON chega como
+  `List` do Java, que tem `contains(...)`. As asserções vêm depois, sobre a resposta guardada
+  (`resposta.then().body(...)`).
+- Import: `org.junit.jupiter.api.Assumptions` (o `assumeTrue` estático). Teste pulado aparece
+  como *skipped* no relatório e na contagem da suíte.
+- Combine matchers como no SCAN-07: "nenhum id começando em `CVE_`" é `not(hasItem(...))`
+  com um `startsWith` dentro.
 - Não fixe a lista inteira de CVEs nem o score: o NVD muda.
 - Cache: a rodada vazia fica guardada por 2 min. Rodar de novo logo em seguida devolve o
   mesmo vazio.
@@ -542,7 +562,10 @@ container, sem API key).
 
 **Conferido em 2026-11-15.** PHP 8.3.36. Rodada 1: `[]` com CVE "OK". Rodada 2 (2 min
 depois): `["CVE-2007-3205"]`. Sem issue nem nota de CVE nas duas. Em 2026-11-22:
-`moduleStatus.CVE` OK e `["CVE-2007-3205"]`.
+`moduleStatus.CVE` OK e `["CVE-2007-3205"]`. **Reconferido ao vivo em 2026-11-26** (Backend
+`11fd610`, qa-pro, pt-BR, scan em 4,6 s): PHP `8.3.36`, `moduleStatus.CVE` OK, `cveFindings`
+com um item, `cveId` `CVE-2007-3205` (CVSS 5.0, `affectedSoftware` "PHP 8.3.36"); sem issue
+`CVE_*` e sem nota com "CVE". (As listas entre colchetes acima são os `cveId`, não o formato.)
 
 ---
 

@@ -1447,7 +1447,7 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 6 | AUTH-04 | ✅ `AuthTotpReplayTest` (2026-11-26), qa-free, lib `dev.samstevens.totp` no pom. Vermelho visto no 8099: o replay do passo 4 dá 200 |
 | 7 | SCAN-09 | ✅ `LaudoStubsTest` (2026-11-26), três rodadas de revisão. Vermelho visto com mapeamento temporário que lista o `XSRF-TOKEN` (tamanho 5; sem a linha do tamanho, a ausência pega) |
 | 8 | SCAN-07 | ✅ `DnsFalsoTest` (2026-11-26), duas rodadas de revisão. Vermelho visto invertendo linhas do CSV (`quarantine` MEDIUM, `dmarc-none` sem issue, penalidade -10) |
-| **9** | **SCAN-05** | **Próximo.** Ficha 9 (`LaudoStubsTest`, depende do NVD de verdade: `Assumptions`); reconferir o contrato ao vivo antes de passar |
+| **9** | **SCAN-05** | **Passado ao dono em 2026-11-26**, com o contrato reconferido ao vivo (ficha 9). Método novo no `LaudoStubsTest`; depende do NVD de verdade, primeiro `Assumptions`. `cveFindings` é lista de objetos (`cveFindings.cveId`) |
 | 10 a 22 | SCAN-08, SCAN-11, SCAN-10... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
