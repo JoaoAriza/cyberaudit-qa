@@ -115,4 +115,26 @@ public class LaudoStubsTest extends TestConfig {
                 .body("score.issues.id", not(hasItem(startsWith("CVE"))))
                 .body("score.notes", not(hasItem(containsString("CVE"))));
     }
+
+    @Test
+    @DisplayName("SCAN-08: HSTS ausente deve gerar issue com severidade MEDIUM e penalidade correta de -10")
+    void deveValidarSevMediaENotaParaHstsAusente() {
+        String token = tokenQaPro();
+        String targetUrl = "http://sem-hsts-mock:8080";
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .header("Accept-Language", "pt-BR")
+                .queryParam("url", targetUrl)
+                .queryParam("active", false)
+                .when()
+                .get("/scan")
+                .then()
+                .statusCode(200)
+                .body("url", equalTo(targetUrl))
+
+                .body("headers.'Strict-Transport-Security'", equalTo("MISSING"))
+                .body("score.issues.find { it.id == 'HSTS_MISSING' }.severity", equalTo("MEDIUM"))
+                .body("score.notes", hasItem(allOf(startsWith("HSTS ausente"), endsWith("-10"))));
+    }
 }
