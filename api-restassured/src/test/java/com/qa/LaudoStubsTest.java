@@ -10,6 +10,7 @@ import java.util.Date;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static io.restassured.RestAssured.withArgs;
 import static org.hamcrest.Matchers.*;
 
 import org.junit.jupiter.api.Assumptions;
@@ -163,5 +164,34 @@ public class LaudoStubsTest extends TestConfig {
                 .body("url", equalTo(targetUrl))
 
                 .body("headers.'Strict-Transport-Security'", equalTo(expectedHeaderValue));
+    }
+
+    @ParameterizedTest(name = "SCAN-10: Achado LOW [{2}] deve ter nota iniciando com [{0}], finalizando com [{1}] e severidade LOW")
+    @CsvSource({
+            "Versão de software exposta, : -2, SERVER_VERSION_EXPOSED",
+            "Paths sensíveis em robots.txt, : -2, SENSITIVE_ROBOTS_PATHS",
+            "Referrer-Policy ausente, : -1, REFERRER_POLICY_MISSING",
+            "Permissions-Policy ausente, : -1, PERMISSIONS_POLICY_MISSING",
+            "security.txt ausente, : -1, SECURITY_TXT_MISSING"
+    })
+    @DisplayName("SCAN-10: Achados de higiene de severidade LOW devem custar no máximo 2 pontos e manter severidade LOW")
+    void deveValidarPesoseSeveridadeParaAchadosLow(String notePrefix, String noteSuffix, String issueId) {
+        String token = tokenQaPro();
+        String targetUrl = "http://pesos-mock:8080";
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .header("Accept-Language", "pt-BR")
+                .queryParam("url", targetUrl)
+                .queryParam("active", false)
+                .when()
+                .get("/scan")
+                .then()
+                .statusCode(200)
+                .body("url", equalTo(targetUrl))
+
+                .body("score.issues.find { it.id == '%s' }.severity", withArgs(issueId), equalTo("LOW"))
+
+                .body("score.notes", hasItem(allOf(startsWith(notePrefix), endsWith(noteSuffix))));
     }
 }
