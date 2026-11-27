@@ -708,20 +708,60 @@ a Hostinger é reconhecida. Antes (BUG-09), qualquer TXT contava, até chave rev
 
 **Pedido.** `GET /scan?url=http://<domínio>:8080&active=false`, qa-pro.
 
-**Afirmar** (em `dnsSecurityResult`, depois de `lookupFailed` false):
+**Afirmar**, nesta ordem (tudo em `dnsSecurityResult`):
+1. `lookupFailed` false.
+2. Controle: `spfRecord` igual a `v=spf1 include:_spf.mail.hostinger.com ~all`. Os três
+   domínios têm esse mesmo SPF, então ele pode ser fixo, sem coluna no CSV.
+3. A tabela:
 
-| Domínio | `dkimHintFound` | `dkimSelector` |
-|---|---|---|
-| `dkim-hostinger.dns-mock.test` | true | `hostingermail-a` |
-| `dkim-revogado.dns-mock.test` | false | `NOT_DETECTED` |
-| `dkim-curinga.dns-mock.test` | false | `NOT_DETECTED` |
+| Domínio | `dkimHintFound` | `dkimSelector` | O que a linha prova |
+|---|---|---|---|
+| `dkim-hostinger.dns-mock.test` | true | `hostingermail-a` | A Hostinger é reconhecida e o seletor escolhido é o que tem chave. Os três seletores são CNAME para a zona do provedor, onde só o `-a` tem `p=` preenchido |
+| `dkim-revogado.dns-mock.test` | false | `NOT_DETECTED` | Chave revogada (`v=DKIM1; p=`) não conta. Os três seletores existem, mas nenhum tem chave |
+| `dkim-curinga.dns-mock.test` | false | `NOT_DETECTED` | Um TXT curinga não conta como DKIM. Com `*.dkim-curinga TXT "v=spf1 ..."`, todo seletor sondado "existe" |
 
-**Armadilhas.** `dkim-revogado` e `dkim-curinga` não têm DMARC, então saem com spoofing
-HIGH. É esperado e não é deste caso: não afirme risco nesses dois.
+**Armadilhas.**
+- `dkim-revogado` e `dkim-curinga` não têm DMARC, então saem com spoofing HIGH. É
+  esperado e não é deste caso: não afirme risco nem score em nenhum dos três (o risco é do
+  SCAN-07).
+- **As linhas 2 e 3 esperam "nada encontrado", que é o mesmo resultado de qualquer domínio
+  sem DKIM.** Sem um controle, trocar o domínio da linha por outro da zona (o
+  `quarantine.dns-mock.test`, por exemplo) continua verde e a linha não está provando nada.
+  Por isso o `lookupFailed` vem primeiro (DNS fora do ar também daria "nada encontrado") e
+  o `spfRecord` da Hostinger vem antes da tabela. É a mesma lição do SCAN-07 e do SCAN-10:
+  uma asserção de ausência precisa de algo que prove que o scan olhou o lugar certo.
+- **Afirme os dois campos com `equalTo`.** Para a linha 3, o vermelho de verdade (antes do
+  fix) sai com `dkimHintFound` true e um seletor qualquer da lista. Um
+  `not(equalTo("NOT_DETECTED"))` na linha 1 aceitaria qualquer seletor; o `hostingermail-a`
+  exato é o que prova a escolha certa.
+- **Tipo da coluna.** `dkimHintFound` é booleano no JSON. Declare o parâmetro como
+  `boolean`: o JUnit converte o texto `true` do CSV sozinho. Com `String`, o
+  `equalTo("true")` falha com `Expected: "true"` e `Actual: true`. As aspas no Expected são
+  a pista.
+- Cabe no `DnsFalsoTest` com um `@ParameterizedTest` e um `@CsvSource` de três linhas, no
+  mesmo molde do SCAN-07 (o domínio sem `http://`, o teste monta a URL).
+- Cache de 2 min por URL: uma rodada em cerca de 2 s é cache. Para scans novos,
+  `docker restart env-backend-1`. Scan novo leva de 1 a 14 s por linha (medido hoje).
 
-**Ver o vermelho.** Imagem do commit `7b3236d`.
+**Ver o vermelho.**
+- Na imagem do commit `7b3236d` (o último antes do fix, `9f9e84e`) **só as linhas 1 e 3
+  ficam vermelhas.** Ali a lista de seletores ainda não tinha os da Hostinger, então
+  ninguém sondava o `hostingermail-a`. A linha 1 sai false e `NOT_DETECTED`; a linha 3 sai
+  true, porque qualquer TXT contava e o curinga responde a todos. **A linha 2 fica verde
+  nessa imagem**: sem sondar os seletores da Hostinger, a chave revogada nunca era lida. O
+  defeito do `p=` vazio só aparece quando os seletores entram sem a checagem da chave, e
+  os dois entraram no mesmo commit. A imagem é opcional e trabalhosa (ver §0): peça que eu
+  preparo.
+- Sem imagem, para ver cada linha saber falhar: troque o `true, hostingermail-a` da linha 1
+  com o `false, NOT_DETECTED` da linha 2. As duas devem ficar vermelhas. Depois, troque só
+  o domínio da linha 3 por `quarantine.dns-mock.test`: ela tem que ficar vermelha no
+  `spfRecord`. Se ficar verde, falta o controle.
 
-**Conferido em 2026-11-15.** A tabela inteira.
+**Conferido em 2026-11-15 e de novo ao vivo em 2026-11-27,** no 8081 com scans novos: os
+três domínios batem com a tabela, `lookupFailed` false e o mesmo `spfRecord` nos três. O
+`dkim-hostinger` sai com spoofing LOW (tem DMARC quarantine); os outros dois saem com HIGH.
+O comportamento antes do fix foi lido no código do `7b3236d`: a sonda contava
+`records.length > 0` e a lista não tinha `hostingermail-*`.
 
 ---
 

@@ -1433,7 +1433,8 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
     execuções do `@CsvSource`), 63 / 1 / 0. Com o SCAN-05 (2026-11-27), 64 / 1 / 0, ou 63 / 1 / 1
     se o NVD não responder (o SCAN-05 sai pulado). Com o SCAN-08, 65 / 1 / 0 (ou 64 / 1 / 1). Com o SCAN-11 (duas execuções), 67 / 1 / 0 (ou 66 / 1 / 1).
     Com o SCAN-10 (cinco execuções), 72 / 1 / 0 (ou 71 / 1 / 1). O `LaudoStubsTest` sozinho: 10
-    testes, verde em 40 s com scans novos (2026-11-27).
+    testes, verde em 40 s com scans novos (2026-11-27). Com o SCAN-06 (três execuções no
+    `DnsFalsoTest`, que passa a ter 8), a conta esperada vai a 75 / 1 / 0 (ou 74 / 1 / 1).
 
 ### A fila: 33 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
 
@@ -1454,7 +1455,7 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 10 | SCAN-08 | ✅ `LaudoStubsTest` (2026-11-27), aprovado na 1ª rodada. Vermelho visto invertendo: severidade HIGH, nota terminando em `-5`, header `OK` |
 | 11 | SCAN-11 | ✅ `LaudoStubsTest` (2026-11-27), aprovado na 1ª rodada. Vermelho visto: textos trocados entre as linhas e `Accept-Language` fixo em pt-BR |
 | 12 | SCAN-10 | ✅ `LaudoStubsTest` (2026-11-27), três rodadas de revisão. Vermelho visto: robots.txt e Referrer-Policy com `-5`, id com erro de digitação |
-| **13** | **SCAN-06** | **Próximo.** Ficha 13 (`DnsFalsoTest`, igual ao SCAN-07 com outro campo); reconferir o contrato ao vivo antes de passar |
+| **13** | **SCAN-06** | **Passado ao dono em 2026-11-27**, contrato reconferido ao vivo. Ficha 13 (`DnsFalsoTest`, três linhas, com o `spfRecord` da Hostinger como controle). Na imagem `7b3236d` só as linhas 1 e 3 ficam vermelhas. Esperando o teste do dono para revisar |
 | 14 a 22 | UI-04, PLAN-03, PLAN-04... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
@@ -1625,6 +1626,6 @@ curl http://localhost:8099/actuator/health
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O próximo é o SCAN-06 (ficha 13): reconfira o
-> contrato ao vivo e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
+> seguir a fila das fichas no ritmo da §13. O SCAN-06 (ficha 13) já foi passado em 2026-11-27:
+> se eu disser que escrevi, revise numa cópia; senão, me lembre do caso. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.
