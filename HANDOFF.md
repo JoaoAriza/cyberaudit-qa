@@ -1457,7 +1457,7 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 11 | SCAN-11 | ✅ `LaudoStubsTest` (2026-11-27), aprovado na 1ª rodada. Vermelho visto: textos trocados entre as linhas e `Accept-Language` fixo em pt-BR |
 | 12 | SCAN-10 | ✅ `LaudoStubsTest` (2026-11-27), três rodadas de revisão. Vermelho visto: robots.txt e Referrer-Policy com `-5`, id com erro de digitação |
 | 13 | SCAN-06 | ✅ `DnsFalsoTest` (2026-11-28), aprovado na 1ª rodada. Vermelho visto trocando as expectativas das linhas 1 e 2. Na imagem `7b3236d` só as linhas 1 e 3 ficariam vermelhas |
-| **14** | **UI-04** | **Próximo.** Ficha 14 (Cypress, `ui-04-dmarc.cy.js`); reconferir na tela antes de passar |
+| **14** | **UI-04** | **Passado ao dono em 2026-11-28**, conferido na tela. Ficha 14 (Cypress, `ui-04-dmarc.cy.js`): `.clear()`, `url` da requisição decodificado e comparado inteiro, título "DMARC" pelo texto exato. Esperando o spec do dono para revisar |
 | 15 a 22 | PLAN-03, PLAN-04... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
@@ -1639,6 +1639,6 @@ curl http://localhost:8099/actuator/health
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O próximo é o UI-04 (ficha 14): reconfira na tela
-> e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
+> seguir a fila das fichas no ritmo da §13. O UI-04 (ficha 14) já foi passado em 2026-11-28:
+> se eu disser que escrevi, revise numa cópia; senão, me lembre do caso. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.

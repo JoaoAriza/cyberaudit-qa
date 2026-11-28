@@ -780,30 +780,69 @@ O comportamento antes do fix foi lido no código do `7b3236d`: a sonda contava
 (`p=quarantine; pct=50`), não o nível que o Backend atribuiu. Antes (BUG-15) saía
 "p=medium", valor que não existe no DMARC, logo abaixo de um resumo que dizia o contrário.
 
-**Preparar.** Frontend da imagem atual (`up -d --build frontend` se ainda não rebuildou
-depois de 2026-11-14).
+**Preparar.** Nada. A imagem do `frontend` que está no ar (criada em 2026-11-24) já tem o
+fix do BUG-15 (`c7006bc`, de 2026-11-15). Backend no 8081.
 
 **Passos.**
-- Entrar como no UI-02: `cy.task('forgeToken', …)` e o token no `localStorage` antes de
-  carregar. **Não precisa de login real nem de 2FA.** Hoje conferi por esse caminho e
-  funciona; ele também evita colidir com a janela TOTP do UI-01.
+- Entrar como no UI-02: `cy.task('forgeToken', …)` e o token no `localStorage`
+  (`Cypress.env('tokenKey')`) antes de carregar. **Não precisa de login real nem de 2FA.**
+  Esse caminho também evita colidir com a janela TOTP do UI-01.
+- Prender a requisição de scan antes de clicar: a tela chama
+  `POST /scan/async?url=…&active=false&refresh=true&notify=false` (202) e depois consulta
+  `GET /scan/async/<id>` até terminar.
 - **Limpar o campo de URL** e digitar `http://quarantine-pct50.dns-mock.test:8080`.
-- Clicar em "◈ Scan", esperar a nota ("/100") e abrir o módulo **Reconnaissance** no menu
-  lateral.
+- Clicar em "◈ Scan", esperar a nota ("/100", com o mesmo timeout de 60 s do UI-02) e clicar
+  em **Reconnaissance** no menu lateral.
 - Ler o valor logo abaixo do título "DMARC".
 
-**Afirmar.** O card mostra `p=quarantine; pct=50` e não contém `p=medium`.
+**Afirmar.**
+1. O `url` da requisição de scan, **decodificado**, igual a
+   `http://quarantine-pct50.dns-mock.test:8080` (ver armadilhas).
+2. A nota "/100" visível.
+3. No card: o elemento logo depois do título "DMARC" com o texto exato
+   `p=quarantine; pct=50`. Texto exato já exclui o `p=medium` de antes do fix; um
+   `not.contain('p=medium')` no mesmo elemento é opcional.
 
 **Armadilhas.**
 - **O campo abre com "github.com" escrito** (valor inicial do Frontend, não placeholder). O
-  `.type()` do Cypress digita no fim, e o scan vai para `github.comhttp://…`. Use `.clear()`
-  antes. É o que quebra o UI-02 (abaixo).
-- Para provar o alvo, prenda a requisição de scan e afirme o `url` dela. A tela chama
-  `POST /scan/async?url=…&active=false&refresh=true…`. Ou afirme o host completo no
-  resultado. "dns-mock" sozinho casaria com um alvo torto.
+  `.type()` do Cypress digita no fim. Medido hoje na tela, sem limpar: o pedido sai com
+  `url=github.comhttp://quarantine-pct50.dns-mock.test:8080`, o Backend responde 422 e a
+  tela mostra "⚠ O domínio github.comhttp não foi encontrado no DNS. Confira o endereço
+  digitado.", sem nota. Desde o fix do BUG-16 isso dá vermelho, não verde falso, mas só depois
+  dos 60 s de espera da nota. Use `.clear()` antes de digitar. É o que quebra o UI-02 (abaixo).
+- **A URL bruta da requisição vem codificada:** `url=http:%2F%2Fquarantine-pct50…` (as
+  barras viram `%2F`, os dois-pontos não). Por isso:
+  - `include('http://quarantine…')` na URL bruta **falha mesmo com o alvo certo**;
+  - `include('quarantine-pct50.dns-mock.test:8080')` **passa mesmo com o campo sujo**,
+    porque o host com a porta também está dentro de `github.comhttp:%2F%2F…`.
+  O certo é decodificar o parâmetro e comparar inteiro. O `URL` do próprio JavaScript faz
+  isso: `new URL(<url da requisição>).searchParams.get('url')` devolve
+  `http://quarantine-pct50.dns-mock.test:8080` (conferido no Node para os dois casos).
+- **"DMARC" aparece duas vezes na tela.** O primeiro é o resumo do módulo ("SPF e DMARC
+  publicados, mas o DMARC não manda barrar…"), que vem antes do card. O segundo é o título
+  do card. Um `cy.contains('DMARC')` pega o primeiro, e o valor lido ao lado sai errado. Ache
+  o título pelo texto inteiro (regex com `^` e `$`); o valor é o elemento irmão logo
+  depois dele. O card não tem classe, id nem `data-cy`: o texto é o único ponto de apoio.
+- **Não afirme o selo "✓ OK" do card.** Ele só diz que o DMARC está publicado (no
+  `App.tsx`, o card usa `present: dmarcPresent` e `warn: false`), e não faz parte do contrato.
+- Asserção de ausência sozinha (`not.contain('p=medium')`) num elemento errado é verde para
+  sempre: por isso o texto exato vem primeiro, no mesmo elemento.
 
-**Conferido em 2026-11-15.** Token forjado, campo limpo, scan, Reconnaissance → card
-"DMARC / p=quarantine; pct=50".
+**Ver o vermelho.**
+- O de verdade pede o `frontend` buildado no commit `d99c460` (o último antes do fix
+  `c7006bc`): o card sai `p=medium`. É opcional e trabalhoso (§0); peça que eu preparo.
+- Sem imagem: tire o `.clear()` uma vez. A asserção da requisição fica vermelha na hora, com
+  `github.comhttp://…`, sem esperar os 60 s. Depois, espere `pct=100` no card em vez de
+  `pct=50`: tem de ficar vermelho no texto do card.
+
+**Conferido em 2026-11-15 e de novo na tela em 2026-11-28** (navegador embutido, token
+forjado como no `forgeToken`, Frontend do 8090). Campo limpo, scan com 202, nota na tela,
+Reconnaissance, card "DMARC / p=quarantine; pct=50" e nenhum `p=medium` na página. Sem
+limpar o campo, 422 com o aviso acima.
+
+**Observação fora do caso.** O selo "✓ OK" do card fica logo abaixo do resumo dizendo que o
+DMARC não manda barrar, e o módulo mostra "SPOOFING: MEDIUM". Pode ser defeito de texto
+parecido com o BUG-15. Se o dono achar que é, vira lateral; não entra no UI-04.
 
 ---
 
