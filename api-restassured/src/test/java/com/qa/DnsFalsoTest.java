@@ -65,4 +65,32 @@ public class DnsFalsoTest extends TestConfig {
             request.body("score.issues.find { it.id == 'DNS_EMAIL_SPOOFING' }.severity", equalTo(expectedSeverity));
             request.body("score.notes", hasItem(allOf(startsWith("DNS Security"), endsWith(": " + expectedPenalty))));        }
     }
+
+    @ParameterizedTest(name = "SCAN-06: Domínio [{0}] deve retornar dkimHintFound=[{1}] e seletor=[{2}]")
+    @CsvSource({
+        "dkim-hostinger.dns-mock.test, true, hostingermail-a",
+        "dkim-revogado.dns-mock.test, false, NOT_DETECTED",
+        "dkim-curinga.dns-mock.test, false, NOT_DETECTED"
+    })
+    @DisplayName("SCAN-06: O scanner deve julgar DKIM apenas quando houver chave válida e reconhecer a Hostinger")
+    void deveValidarDkimESeletorPorDominio(String subdomain, boolean expectedDkimFound, String expectedSelector) {
+        String token = tokenQaPro();
+        String targetUrl = "http://" + subdomain + ":8080";
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .header("Accept-Language", "pt-BR")
+                .queryParam("url", targetUrl)
+                .queryParam("active", false)
+                .when()
+                .get("/scan")
+                .then()
+                .statusCode(200)
+                .body("url", equalTo(targetUrl))
+
+                .body("dnsSecurityResult.lookupFailed", equalTo(false))
+                .body("dnsSecurityResult.spfRecord", equalTo("v=spf1 include:_spf.mail.hostinger.com ~all"))
+                .body("dnsSecurityResult.dkimHintFound", equalTo(expectedDkimFound))
+                .body("dnsSecurityResult.dkimSelector", equalTo(expectedSelector));
+    }
 }
