@@ -1,6 +1,6 @@
 # HANDOFF — cyberaudit-qa (para colar no próximo chat)
 
-> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (UI-04), como o chat
+> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (PLAN-03), como o chat
 > trabalha e a primeira mensagem sugerida. As seções 1 a 12 são histórico.
 
 Atualizado em 2026-10-03, porque a janela de contexto do chat anterior encheu.
@@ -1457,8 +1457,9 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 11 | SCAN-11 | ✅ `LaudoStubsTest` (2026-11-27), aprovado na 1ª rodada. Vermelho visto: textos trocados entre as linhas e `Accept-Language` fixo em pt-BR |
 | 12 | SCAN-10 | ✅ `LaudoStubsTest` (2026-11-27), três rodadas de revisão. Vermelho visto: robots.txt e Referrer-Policy com `-5`, id com erro de digitação |
 | 13 | SCAN-06 | ✅ `DnsFalsoTest` (2026-11-28), aprovado na 1ª rodada. Vermelho visto trocando as expectativas das linhas 1 e 2. Na imagem `7b3236d` só as linhas 1 e 3 ficariam vermelhas |
-| **14** | **UI-04** | **Passado ao dono em 2026-11-28**, conferido na tela. Ficha 14 (Cypress, `ui-04-dmarc.cy.js`): `.clear()`, `url` da requisição decodificado e comparado inteiro, título "DMARC" pelo texto exato. Esperando o spec do dono para revisar |
-| 15 a 22 | PLAN-03, PLAN-04... | 🔲, na ordem da tabela |
+| 14 | UI-04 | ✅ `ui-04-dmarc.cy.js` (2026-11-28), três rodadas de revisão; 6 de 6 verdes na cópia. Vermelho visto: `pct=100` no card e o campo sem `.clear()` (`github.comhttp://…` no `url` decodificado) |
+| **15** | **PLAN-03** | **Próximo.** Ficha 15 (RestAssured); reconferir o contrato ao vivo antes de passar. O vermelho dele é no 8099 (não rebuildar antes) |
+| 16 a 22 | PLAN-04, ... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
 | 30 a 33 | PAY-14 (Cypress), UI-01 e UI-02 (Selenium), DOM-02 | 🔲 Começam por decisão do dono (fichas 30 a 33) |
@@ -1570,6 +1571,23 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
   verde: o defeito do `p=` vazio só existe quando os seletores da Hostinger entram sem a
   checagem da chave, e os dois entraram no mesmo commit.
 
+**O que a revisão do UI-04 ensinou (2026-11-28):**
+- **A tela troca de página depois de carregar.** Abre na Home (que tem um campo de URL igual)
+  e leva o logado ao Scanner quando o `/auth/me` responde. Digitar logo depois do `visit`
+  às vezes pega o campo da Home, que some no meio do `.type()`. Espere algo que só existe
+  no Scanner (o botão PDF). Esperar o `/auth/me` não bastou (1 falha em 9).
+- **`cy.contains` procura pedaço de texto:** `'Scan'` casou com o "Scanner" do menu, e
+  `.contains('p=quarantine')` passava no card. Texto inteiro no clique, `have.text` na
+  asserção.
+- **`have.text` sobre vários elementos junta os textos** (`DMARCp=quarantine; pct=50`).
+  Do título, `.next()` é só o valor.
+- **Login forjado:** chave e e-mail do `Cypress.env`. Com qualquer um errado a tela fica de
+  visitante, e o teste falha longe da causa.
+- **Na revisão de Cypress:** a cópia usa um *junction* para o `node_modules` do dono. Tire
+  o junction com `cmd /c rmdir`, nunca com `rm -rf` na pasta (apagaria o `node_modules`
+  de verdade). Copie specs com Node ou `cp`, não com `Get-Content` do PowerShell 5.1, que
+  estraga o "◈".
+
 **Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
 `playwright/`, e começa pela Etapa P0 (decisões).
 
@@ -1578,6 +1596,16 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 Os detalhes estão no fim de `docs/fichas-da-fila.md`.
 - **UI-02** (⚠️, verde falso): o campo abre com "github.com" e o `.type()` acrescenta ao
   texto. Falta `.clear()` e afirmar o host exato.
+  Pela revisão do UI-04 (2026-11-28), o UI-02 também digita logo depois do `visit` e pode
+  pegar o campo da Home antes da troca para o Scanner: falta esperar o Scanner (botão PDF)
+  antes de tocar no campo. Ver a ficha 14.
+  **Medido em 2026-11-28:** o spec como está estoura os 60 s no `contains('/100')` (o POST
+  sai com `github.comwiremock:8080/health` e leva 422; a tela mostra "O domínio
+  github.comwiremock não foi encontrado no DNS"). Numa variante de diagnóstico com
+  `.clear()` e a espera do PDF, verde em 22 s. **Mas o `cy.contains('wiremock')` no
+  Histórico não prova o registro deste scan:** a tela lista o último scan por domínio (23
+  domínios) e o card "wiremock" já estava lá de execuções anteriores. Para provar, falta
+  algo que mude com este scan (a data do "Último scan", ou o histórico do domínio).
 - **PLAN-02** (⚠️): toma 429 na 6ª chamada, pelo rate limit do BUG-20. Falta tratar o 429
   como "espere e repita".
 - **Sugestão, sem pressa:** o gerador de token está copiado no `SsrfGuardTest` (com
@@ -1639,6 +1667,6 @@ curl http://localhost:8099/actuator/health
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O UI-04 (ficha 14) já foi passado em 2026-11-28:
-> se eu disser que escrevi, revise numa cópia; senão, me lembre do caso. Lembre: o código de teste é meu; você faz infra,
+> seguir a fila das fichas no ritmo da §13. O próximo é o PLAN-03 (ficha 15): reconfira o
+> contrato ao vivo e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.

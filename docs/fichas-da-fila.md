@@ -810,6 +810,30 @@ fix do BUG-15 (`c7006bc`, de 2026-11-15). Backend no 8081.
   tela mostra "⚠ O domínio github.comhttp não foi encontrado no DNS. Confira o endereço
   digitado.", sem nota. Desde o fix do BUG-16 isso dá vermelho, não verde falso, mas só depois
   dos 60 s de espera da nota. Use `.clear()` antes de digitar. É o que quebra o UI-02 (abaixo).
+- **Medido na revisão do spec do dono (2026-11-28), a tela troca de página depois de
+  carregar.** Ela sempre abre na Home, que tem um campo de URL com o mesmo placeholder do
+  Scanner. Quando o `/auth/me` responde, um usuário logado é levado ao Scanner
+  (`App.tsx`, efeito `landingDecidedRef`). Um `cy.get('input').first()` logo depois do
+  `visit` às vezes pega o campo da **Home**, que some no meio do `.type()` ("the page updated
+  as a result of this command… no longer attached to the DOM"). Falhou 1 vez a cada 3 a 7
+  execuções; esperar o `/auth/me` também falhou (1 em 9). **Espere algo que só existe no
+  Scanner antes de tocar no campo:** com `cy.contains('button', 'PDF').should('be.visible')`,
+  10 de 10 verdes. O "Sair" não serve: existe antes da troca, e no tamanho de tela do Cypress
+  (1000x660) fica escondido.
+- **Login forjado: chave e e-mail do `Cypress.env`.** A chave do `localStorage` é
+  `Cypress.env('tokenKey')` (`cyberaudit.token`) e o e-mail, `Cypress.env('emailPro')`
+  (`qa-pro@cyberaudit.test`). Com qualquer um dos dois errado, a tela fica de visitante
+  (com o e-mail errado, `/auth/me` dá 401). O `forgeToken` só lê `email` e `userId`; um
+  `role` passado é ignorado. Gravar o token por `cy.window()` antes do `cy.visit` funciona,
+  assim como o `onBeforeLoad` do UI-02.
+- **`cy.contains('button, a', 'Scan')` clica em "Scanner"**, o botão do menu, que vem antes
+  no DOM e também contém "Scan". O scan nunca sai. Use o texto inteiro, `'◈ Scan'`.
+- **`.contains()` aceita pedaço do texto:** `.contains('p=quarantine')` também passa
+  (medido). Para o texto exato, `have.text` no elemento do valor.
+- **`have.text` sobre vários elementos junta os textos.** `.parent().find('div, span, p')`
+  devolve o título e o valor, e o `have.text` compara `DMARCp=quarantine; pct=50` (medido,
+  vermelho sempre). Do título, `.next()` é só o valor: com ele, 6 de 6 verdes; `pct=100`
+  e o texto cortado `p=quarantine` ficam vermelhos.
 - **A URL bruta da requisição vem codificada:** `url=http:%2F%2Fquarantine-pct50…` (as
   barras viram `%2F`, os dois-pontos não). Por isso:
   - `include('http://quarantine…')` na URL bruta **falha mesmo com o alvo certo**;
