@@ -1,6 +1,6 @@
 # HANDOFF — cyberaudit-qa (para colar no próximo chat)
 
-> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (SCAN-06), como o chat
+> **Retomar pela §13 (2026-11-24):** estado atual, próximo caso (UI-04), como o chat
 > trabalha e a primeira mensagem sugerida. As seções 1 a 12 são histórico.
 
 Atualizado em 2026-10-03, porque a janela de contexto do chat anterior encheu.
@@ -1434,7 +1434,8 @@ seções anteriores, que ficam como histórico. As regras da §0 continuam valen
     se o NVD não responder (o SCAN-05 sai pulado). Com o SCAN-08, 65 / 1 / 0 (ou 64 / 1 / 1). Com o SCAN-11 (duas execuções), 67 / 1 / 0 (ou 66 / 1 / 1).
     Com o SCAN-10 (cinco execuções), 72 / 1 / 0 (ou 71 / 1 / 1). O `LaudoStubsTest` sozinho: 10
     testes, verde em 40 s com scans novos (2026-11-27). Com o SCAN-06 (três execuções no
-    `DnsFalsoTest`, que passa a ter 8), a conta esperada vai a 75 / 1 / 0 (ou 74 / 1 / 1).
+    `DnsFalsoTest`, que passa a ter 8), a conta esperada vai a 75 / 1 / 0 (ou 74 / 1 / 1). O
+    `DnsFalsoTest` sozinho: 8 testes verdes (2026-11-28).
 
 ### A fila: 33 casos, na ordem da tabela "Ordem sugerida" de `docs/fichas-da-fila.md`
 
@@ -1455,8 +1456,9 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 | 10 | SCAN-08 | ✅ `LaudoStubsTest` (2026-11-27), aprovado na 1ª rodada. Vermelho visto invertendo: severidade HIGH, nota terminando em `-5`, header `OK` |
 | 11 | SCAN-11 | ✅ `LaudoStubsTest` (2026-11-27), aprovado na 1ª rodada. Vermelho visto: textos trocados entre as linhas e `Accept-Language` fixo em pt-BR |
 | 12 | SCAN-10 | ✅ `LaudoStubsTest` (2026-11-27), três rodadas de revisão. Vermelho visto: robots.txt e Referrer-Policy com `-5`, id com erro de digitação |
-| **13** | **SCAN-06** | **Passado ao dono em 2026-11-27**, contrato reconferido ao vivo. Ficha 13 (`DnsFalsoTest`, três linhas, com o `spfRecord` da Hostinger como controle). Na imagem `7b3236d` só as linhas 1 e 3 ficam vermelhas. Esperando o teste do dono para revisar |
-| 14 a 22 | UI-04, PLAN-03, PLAN-04... | 🔲, na ordem da tabela |
+| 13 | SCAN-06 | ✅ `DnsFalsoTest` (2026-11-28), aprovado na 1ª rodada. Vermelho visto trocando as expectativas das linhas 1 e 2. Na imagem `7b3236d` só as linhas 1 e 3 ficariam vermelhas |
+| **14** | **UI-04** | **Próximo.** Ficha 14 (Cypress, `ui-04-dmarc.cy.js`); reconferir na tela antes de passar |
+| 15 a 22 | PLAN-03, PLAN-04... | 🔲, na ordem da tabela |
 | 23 a 28 | AUTH-05 (Postman), PAY-03, PAY-05, SCAN-04, SCORE-01, SCAN-02 | 🔲 Fichas prontas, contratos conferidos ao vivo em 2026-11-26 |
 | 29 | AUTH-04 (Cypress) | 🔲 Ficha pronta: API conferida, tela lida no código (conferir na tela no dia) |
 | 30 a 33 | PAY-14 (Cypress), UI-01 e UI-02 (Selenium), DOM-02 | 🔲 Começam por decisão do dono (fichas 30 a 33) |
@@ -1557,6 +1559,17 @@ o que a matriz pedia e as fichas não cobriam, no fim da fila e antes do Playwri
 - **`withArgs`** põe o valor da linha dentro do closure (`'%s'`); a falha mostra o caminho já
   preenchido.
 
+**O que a revisão do SCAN-06 ensinou (2026-11-28):**
+- **Um controle só vale se o valor dele mudar entre o domínio certo e o errado.** O
+  `spfRecord` da Hostinger, que a ficha pedia, é o mesmo em seis dos oito domínios da zona.
+  Trocar o `dkim-curinga` pelo `quarantine` continuou verde. O erro era da ficha, não do
+  teste: corrigida. O `lookupFailed` é o que pega um host fora da zona (sai true).
+- **Coluna booleana no CSV:** com o parâmetro declarado `boolean`, o JUnit converte o `true`
+  do texto e o `equalTo` compara com o booleano do JSON.
+- **Imagem antiga não prova todas as linhas.** No `7b3236d` a linha do `dkim-revogado` fica
+  verde: o defeito do `p=` vazio só existe quando os seletores da Hostinger entram sem a
+  checagem da chave, e os dois entraram no mesmo commit.
+
 **Depois da fila:** Fase 7, Playwright. O plano está em `docs/handoff-playwright.md`, na pasta
 `playwright/`, e começa pela Etapa P0 (decisões).
 
@@ -1626,6 +1639,6 @@ curl http://localhost:8099/actuator/health
 ### Primeira mensagem sugerida para o próximo chat
 
 > Leia o `HANDOFF.md` do `cyberaudit-qa`: as regras da §0 e a §13 (retomar aqui). Vamos
-> seguir a fila das fichas no ritmo da §13. O SCAN-06 (ficha 13) já foi passado em 2026-11-27:
-> se eu disser que escrevi, revise numa cópia; senão, me lembre do caso. Lembre: o código de teste é meu; você faz infra,
+> seguir a fila das fichas no ritmo da §13. O próximo é o UI-04 (ficha 14): reconfira na tela
+> e me passe o resumo. Lembre: o código de teste é meu; você faz infra,
 > revisão numa cópia e docs.

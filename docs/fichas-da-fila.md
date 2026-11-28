@@ -711,7 +711,8 @@ a Hostinger é reconhecida. Antes (BUG-09), qualquer TXT contava, até chave rev
 **Afirmar**, nesta ordem (tudo em `dnsSecurityResult`):
 1. `lookupFailed` false.
 2. Controle: `spfRecord` igual a `v=spf1 include:_spf.mail.hostinger.com ~all`. Os três
-   domínios têm esse mesmo SPF, então ele pode ser fixo, sem coluna no CSV.
+   domínios têm esse mesmo SPF, então ele pode ser fixo, sem coluna no CSV. **Ele pega menos
+   do que parece**: ver a segunda armadilha.
 3. A tabela:
 
 | Domínio | `dkimHintFound` | `dkimSelector` | O que a linha prova |
@@ -725,11 +726,19 @@ a Hostinger é reconhecida. Antes (BUG-09), qualquer TXT contava, até chave rev
   esperado e não é deste caso: não afirme risco nem score em nenhum dos três (o risco é do
   SCAN-07).
 - **As linhas 2 e 3 esperam "nada encontrado", que é o mesmo resultado de qualquer domínio
-  sem DKIM.** Sem um controle, trocar o domínio da linha por outro da zona (o
-  `quarantine.dns-mock.test`, por exemplo) continua verde e a linha não está provando nada.
-  Por isso o `lookupFailed` vem primeiro (DNS fora do ar também daria "nada encontrado") e
-  o `spfRecord` da Hostinger vem antes da tabela. É a mesma lição do SCAN-07 e do SCAN-10:
-  uma asserção de ausência precisa de algo que prove que o scan olhou o lugar certo.
+  sem DKIM.** É a mesma lição do SCAN-07 e do SCAN-10: uma asserção de ausência precisa de
+  algo que prove que o scan olhou o lugar certo. Medido na revisão (2026-11-28), trocando o
+  domínio da linha 3:
+  - Host fora da zona (`cookies-mock`): vermelho, mas no `lookupFailed` (sai true), não no
+    `spfRecord`. Quem segura esse caso é o `lookupFailed`.
+  - `quarantine.dns-mock.test`: **continua verde, mesmo com o controle do `spfRecord`.** Seis
+    dos oito domínios da zona têm o mesmo SPF da Hostinger; só o `reject-pct25` e o
+    `spf-mais-all` têm outro. Esta ficha dizia que essa troca ficaria vermelha: estava errado.
+  - Um controle só separa os domínios se o valor dele mudar de um para o outro. Os que mudam:
+    `dmarcPresent` é false só no `dkim-revogado` e no `dkim-curinga` (os cinco do SCAN-07 e
+    o `dkim-hostinger` têm DMARC), e `mxRecords` tem 2, 1 e 0 registros nos três domínios
+    deste caso (os cinco do SCAN-07 têm 1). É opcional: o defeito do código já dá vermelho
+    sem isso. O controle só protege contra um domínio errado no CSV ou uma zona alterada.
 - **Afirme os dois campos com `equalTo`.** Para a linha 3, o vermelho de verdade (antes do
   fix) sai com `dkimHintFound` true e um seletor qualquer da lista. Um
   `not(equalTo("NOT_DETECTED"))` na linha 1 aceitaria qualquer seletor; o `hostingermail-a`
@@ -753,9 +762,9 @@ a Hostinger é reconhecida. Antes (BUG-09), qualquer TXT contava, até chave rev
   os dois entraram no mesmo commit. A imagem é opcional e trabalhosa (ver §0): peça que eu
   preparo.
 - Sem imagem, para ver cada linha saber falhar: troque o `true, hostingermail-a` da linha 1
-  com o `false, NOT_DETECTED` da linha 2. As duas devem ficar vermelhas. Depois, troque só
-  o domínio da linha 3 por `quarantine.dns-mock.test`: ela tem que ficar vermelha no
-  `spfRecord`. Se ficar verde, falta o controle.
+  com o `false, NOT_DETECTED` da linha 2. As duas ficam vermelhas no `dkimHintFound`
+  (medido em 2026-11-28). A troca do domínio da linha 3 por `quarantine.dns-mock.test` fica
+  **verde** com o `spfRecord` como controle (ver as armadilhas).
 
 **Conferido em 2026-11-15 e de novo ao vivo em 2026-11-27,** no 8081 com scans novos: os
 três domínios batem com a tabela, `lookupFailed` false e o mesmo `spfRecord` nos três. O
